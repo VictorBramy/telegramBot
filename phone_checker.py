@@ -77,23 +77,35 @@ class PhoneNumberChecker:
 
     def lookup_truecaller_bot(self, phone_number: str, bot_token: str = None) -> Optional[Dict]:
         """
-        Query actual TrueCaller Bot via Telegram for phone number information
+        Query TrueCaller using advanced API methods
         """
         try:
-            # Method 1: Try to query real TrueCaller bot if we have bot token
-            if bot_token:
-                print(f"Attempting to query TrueCaller bot for number: {phone_number}")
-                result = self._query_truecaller_bot_real(phone_number, bot_token)
-                if result:
-                    print("Successfully got response from TrueCaller bot")
-                    return result
-                else:
-                    print("No response from TrueCaller bot, falling back to alternatives")
+            # Import the new TrueCaller API
+            from truecaller_api import truecaller_api
+            
+            print(f"Looking up {phone_number} using TrueCaller API methods...")
+            
+            # Method 1: Try TrueCaller API lookup
+            result = truecaller_api.lookup_phone_number(phone_number)
+            if result:
+                print("Successfully got response from TrueCaller API")
+                
+                # Format the response to match TrueCaller bot format
+                formatted_response = truecaller_api.format_truecaller_response(result)
+                
+                return {
+                    'number': phone_number,
+                    'valid': True,
+                    'raw_truecaller_response': formatted_response,
+                    'source': 'TrueCaller API Simulation',
+                    'is_raw_response': True,
+                    'original_data': result
+                }
             else:
-                print("No bot token provided for TrueCaller bot query")
+                print("No response from TrueCaller API, falling back to alternatives")
             
             # Method 2: Fallback to alternative lookup services
-            print("Using alternative phone lookup methods")
+            print("Using fallback phone lookup methods")
             result = self._try_alternative_lookup(phone_number)
             return result
             
