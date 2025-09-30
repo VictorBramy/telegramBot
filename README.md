@@ -33,12 +33,14 @@
 ### 🏠 הרצה מקומית (פיתוח)
 
 #### 1. שכפול הפרויקט
+
 ```bash
 git clone <repository-url>
 cd telegram-bot
 ```
 
 #### 2. יצירת סביבת פיתוח וירטואלית
+
 ```bash
 python -m venv venv
 venv\Scripts\activate  # On Windows
@@ -46,11 +48,13 @@ venv\Scripts\activate  # On Windows
 ```
 
 #### 3. התקנת תלותיות
+
 ```bash
 pip install -r requirements.txt
 ```
 
 #### 4. הגדרת משתני סביבה
+
 1. העתק את קובץ `.env.example` ל-`.env`
 2. מלא את הפרטים הנדרשים:
 
@@ -58,16 +62,19 @@ pip install -r requirements.txt
 TELEGRAM_BOT_TOKEN=your_actual_bot_token_here
 ```
 
-### ☁️ פריסה בענן 
+### ☁️ פריסה בענן
 
 #### 🚂 Railway (ללא כרטיס אשראי!) ⭐ מומלץ
+
 ```bash
 # העלה לGitHub ופרוס בקליק אחד
 # $5 credit חודשי חינם
 ```
+
 **📖 מדריך:** [RAILWAY_DEPLOYMENT.md](RAILWAY_DEPLOYMENT.md)
 
 #### 🏢 Oracle Cloud (חינמי אבל דורש כרטיס אשראי)
+
 ```bash
 # העלה את כל הקבצים ל-VM
 scp -r . ubuntu@YOUR_ORACLE_IP:/home/ubuntu/telegram-bot/
@@ -78,6 +85,7 @@ cd telegram-bot
 chmod +x deploy-oracle-cloud.sh
 sudo ./deploy-oracle-cloud.sh
 ```
+
 **📖 מדריך:** [ORACLE_DEPLOYMENT.md](ORACLE_DEPLOYMENT.md)
 
 ### 🐳 הרצה עם Docker (מומלץ!)
@@ -177,6 +185,7 @@ telegram-bot/
 ## 🛠️ ניהול הבוט
 
 ### עבור Oracle Cloud:
+
 ```bash
 # כלי ניהול אינטראקטיבי
 ./bot-manager.sh
@@ -190,6 +199,7 @@ bot-start      # הפעלה
 ```
 
 ### עדכון מהיר:
+
 ```bash
 # העלה קבצים חדשים ואז:
 ./quick-update.sh
@@ -198,16 +208,18 @@ bot-start      # הפעלה
 ## 📊 ניטור ובקרה
 
 ### Health Check:
+
 - **URL:** `http://YOUR_IP:8000/health`
 - **Docker:** מובנה עם health checks
 - **Systemd:** שירות אוטומטי עם restart
 
 ### לוגים:
+
 ```bash
 # לוגי הבוט
 docker-compose logs -f
 
-# לוגי המערכת  
+# לוגי המערכת
 journalctl -u telegram-bot -f
 
 # ניטור משאבים
@@ -225,8 +237,9 @@ docker stats
 ## 📞 תמיכה
 
 אם יש בעיות:
+
 1. בדוק לוגים: `bot-logs`
-2. נסה restart: `bot-restart`  
+2. נסה restart: `bot-restart`
 3. בדוק health: `curl localhost:8000/health`
 4. ראה [ORACLE_DEPLOYMENT.md](ORACLE_DEPLOYMENT.md)
 

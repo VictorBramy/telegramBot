@@ -22,7 +22,11 @@ load_dotenv()
 # Configure logging
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
+    level=logging.INFO,
+    handlers=[
+        logging.StreamHandler(),  # Console output
+        logging.FileHandler('bot_activity.log', encoding='utf-8')  # File output
+    ]
 )
 logger = logging.getLogger(__name__)
 
@@ -72,6 +76,10 @@ class TelegramBot:
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /start command"""
         user_name = update.effective_user.first_name
+        user_id = update.effective_user.id
+        username = update.effective_user.username or "ללא שם משתמש"
+        
+        logger.info(f"🚀 /start - משתמש: {user_name} (@{username}) | ID: {user_id}")
         welcome_message = f"""
 שלום {user_name}! 👋
 
@@ -92,6 +100,12 @@ class TelegramBot:
 
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /help command"""
+        user_name = update.effective_user.first_name
+        user_id = update.effective_user.id
+        username = update.effective_user.username or "ללא שם משתמש"
+        
+        logger.info(f"❓ /help - משתמש: {user_name} (@{username}) | ID: {user_id}")
+        
         help_text = """
 📋 פקודות זמינות:
 
@@ -110,6 +124,12 @@ class TelegramBot:
 
     async def menu_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /menu command with inline keyboard"""
+        user_name = update.effective_user.first_name
+        user_id = update.effective_user.id
+        username = update.effective_user.username or "ללא שם משתמש"
+        
+        logger.info(f"📋 /menu - משתמש: {user_name} (@{username}) | ID: {user_id}")
+        
         keyboard = [
             [InlineKeyboardButton("ℹ️ מידע", callback_data='info')],
             [InlineKeyboardButton("📍 איתור IP", callback_data='locate_demo')],
@@ -127,6 +147,12 @@ class TelegramBot:
         """Handle inline keyboard button presses"""
         query = update.callback_query
         await query.answer()
+        
+        user_name = update.effective_user.first_name
+        user_id = update.effective_user.id
+        username = update.effective_user.username or "ללא שם משתמש"
+        
+        logger.info(f"🔘 כפתור נלחץ: '{query.data}' - משתמש: {user_name} (@{username}) | ID: {user_id}")
 
         if query.data == 'info':
             await query.edit_message_text("ℹ️ זהו בוט טלגרם פשוט וחכם שנבנה בפייתון!")
@@ -153,8 +179,16 @@ class TelegramBot:
     async def locate_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /locate command for IP geolocation"""
         user_name = update.effective_user.first_name
+        user_id = update.effective_user.id
+        username = update.effective_user.username or "ללא שם משתמש"
         
         # Check if IP/domain was provided
+        if not context.args:
+            logger.info(f"📍 /locate (ללא פרמטר) - משתמש: {user_name} (@{username}) | ID: {user_id}")
+        else:
+            target = ' '.join(context.args)
+            logger.info(f"📍 /locate '{target}' - משתמש: {user_name} (@{username}) | ID: {user_id}")
+        
         if not context.args:
             await update.message.reply_text(
                 "📍 איתור מיקום IP/דומיין\n\n"
@@ -244,6 +278,10 @@ class TelegramBot:
         """Handle regular text messages"""
         user_message = update.message.text
         user_name = update.effective_user.first_name
+        user_id = update.effective_user.id
+        username = update.effective_user.username or "ללא שם משתמש"
+        
+        logger.info(f"💬 הודעה: '{user_message}' - משתמש: {user_name} (@{username}) | ID: {user_id}")
         
         # Simple auto-responses
         if "שלום" in user_message or "היי" in user_message:
