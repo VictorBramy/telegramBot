@@ -128,6 +128,12 @@ class NetworkTools:
         elif range_type == "quick":
             # Quick scan - most important ports
             return [21, 22, 23, 25, 53, 80, 110, 143, 443, 993, 995, 3389, 8080]
+        elif range_type == "full":
+            # Full port scan - ALL ports 1-65535 (WARNING: This is VERY slow!)
+            return list(range(1, 65536))
+        elif range_type == "web":
+            # Web services focused scan
+            return [80, 443, 8000, 8008, 8080, 8081, 8443, 8888, 3000, 3001, 4000, 4001, 5000, 5001, 9000, 9001]
         else:
             return self.get_common_ports()
     
@@ -170,7 +176,7 @@ class NetworkTools:
 
 def format_port_scan_result(result: Dict) -> str:
     """
-    Format port scan results for Telegram message
+    Format port scan results for Telegram message with enhanced UX
     """
     if not result.get('success'):
         return f"❌ **שגיאה בסריקת {result['target']}**\n{result.get('error', 'שגיאה לא ידועה')}"
@@ -181,26 +187,70 @@ def format_port_scan_result(result: Dict) -> str:
     open_ports = result['open_ports']
     closed_count = result['closed_count']
     
-    # Build response message
-    response = f"🔍 **תוצאות סריקת פורטים עבור:** `{target}`\n\n"
-    response += f"⏱️ **זמן סריקה:** {scan_time} שניות\n"
-    response += f"📊 **סה״כ פורטים נסרקו:** {total_ports}\n"
-    response += f"🟢 **פורטים פתוחים:** {len(open_ports)}\n"
-    response += f"🔴 **פורטים סגורים:** {closed_count}\n\n"
+    # Calculate percentage and create visual progress
+    open_count = len(open_ports)
+    open_percentage = (open_count / total_ports * 100) if total_ports > 0 else 0
+    
+    # Create visual progress bar
+    bar_length = 10
+    filled_length = int(bar_length * open_count // total_ports) if total_ports > 0 else 0
+    bar = "🟩" * filled_length + "🟥" * (bar_length - filled_length)
+    
+    # Build response message with better formatting
+    response = f"🎯 **תוצאות סריקה ל-** `{target}`\n\n"
+    
+    # Summary stats with visual elements
+    response += f"📊 **סיכום סריקה:**\n"
+    response += f"⏱️ זמן: `{scan_time}s` | 🎯 נסרקו: `{total_ports:,}`\n"
+    response += f"� פתוחים: `{open_count}` | 🔴 סגורים: `{closed_count}`\n"
+    response += f"� אחוז פתוחים: `{open_percentage:.1f}%`\n\n"
+    
+    # Visual progress bar
+    response += f"� **התפלגות:** {bar}\n\n"
     
     if open_ports:
-        response += "🚪 **פורטים פתוחים:**\n"
-        for port_info in open_ports[:15]:  # Limit to first 15 to avoid message length issues
+        response += "🚪 **פורטים פתוחים שנמצאו:**\n"
+        
+        # Group ports by service type for better readability
+        web_ports = []
+        email_ports = []
+        db_ports = []
+        other_ports = []
+        
+        for port_info in open_ports[:20]:  # Increased limit to 20
             port = port_info['port']
             service = port_info['service']
-            response += f"• `{port}` - {service}\n"
+            
+            if port in [80, 443, 8000, 8080, 8443, 8888, 3000, 5000]:
+                web_ports.append(f"`{port}` {service}")
+            elif port in [25, 110, 143, 465, 587, 993, 995]:
+                email_ports.append(f"`{port}` {service}")
+            elif port in [3306, 5432, 1433, 6379, 27017]:
+                db_ports.append(f"`{port}` {service}")
+            else:
+                other_ports.append(f"`{port}` {service}")
         
-        if len(open_ports) > 15:
-            response += f"... ועוד {len(open_ports) - 15} פורטים\n"
+        # Display grouped results
+        if web_ports:
+            response += f"🌐 **Web Services:** {', '.join(web_ports)}\n"
+        if email_ports:
+            response += f"📧 **Email Services:** {', '.join(email_ports)}\n"
+        if db_ports:
+            response += f"🗄️ **Databases:** {', '.join(db_ports)}\n"
+        if other_ports:
+            response += f"🔧 **Other Services:** {', '.join(other_ports)}\n"
+        
+        if len(open_ports) > 20:
+            response += f"\n➕ **ועוד {len(open_ports) - 20} פורטים נוספים**\n"
     else:
-        response += "🔒 **לא נמצאו פורטים פתוחים**\n"
+        response += "🔒 **לא נמצאו פורטים פתוחים**\n\n"
+        response += "💡 **טיפים:**\n"
+        response += "• נסה סריקה מקיפה יותר (`top100`)\n"
+        response += "• בדוק אם השרת מגיב (`/ping`)\n"
+        response += "• ודא שהכתובת נכונה\n"
     
-    response += f"\n⚠️ **הערה:** סריקה לצרכי אבטחה בלבד"
+    # Security note with better formatting
+    response += f"\n🛡️ **אבטחה:** סריקה לצרכי אבחון בלבד"
     
     return response
 

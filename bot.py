@@ -101,20 +101,26 @@ class TelegramBot:
         logger.info(f"🚀 /start - משתמש: {user_name} (@{username}) | ID: {user_id}")
         user_logger.info(f"🚀 /start - משתמש: {user_name} (@{username}) | ID: {user_id}")
         welcome_message = f"""
-שלום {user_name}! 👋
+🎉 שלום {user_name}! ברוך הבא! 
 
-ברוכים הבאים לבוט הטלגרם החכם! 🤖
+🚀 **VB Network Tools Bot** - כלי רשת מתקדם
 
-🔍 אני יכול לעזור לך עם:
-• איתור מיקום IP (טווחי רשת, חברות, מדינות)
-• ניתוח כתובות דומיין ומיפוי תשתיות
+�️ **מה אני יכול לעשות עבורך:**
+🔍 איתור מיקום IP ודומיינים
+🛡️ סריקת פורטים (מהיר ← מלא)
+🏓 בדיקות Ping ומהירות
+📊 ניתוח תשתיות רשת
 
-📋 פקודות מהירות:
+⚡ **התחל מיד:**
+/menu - תפריט נוח ואינטראקטיבי
 /help - רשימת פקודות מלאה
-/menu - תפריט אינטראקטיבי נוח
-/locate <IP/דומיין> - חיפוש מיקום גאוגרפי
 
-✨ נסה עכשיו: /locate 8.8.8.8
+🎯 **דוגמה מהירה:**
+/locate google.com
+/scan github.com quick
+/ping 8.8.8.8
+
+לחץ /menu להתחלה נוחה! 👆
 """
         await update.message.reply_text(welcome_message)
 
@@ -146,9 +152,11 @@ class TelegramBot:
 /ping github.com
 
 🔹 **סוגי סריקה:**
-• common - פורטים נפוצים (ברירת מחדל)
-• quick - פורטים חשובים בלבד
+• quick - 13 פורטים חשובים (מהיר)
+• common - 19 פורטים נפוצים (ברירת מחדל)
 • top100 - 100 הפורטים הנפוצים ביותר
+• web - פורטי שירותי אינטרנט
+• full - כל הפורטים 1-65535 (איטי מאוד!)
 
 פשוט שלח לי הודעה ואני אענה לך!
 """
@@ -163,11 +171,9 @@ class TelegramBot:
         logger.info(f"📋 /menu - משתמש: {user_name} (@{username}) | ID: {user_id}")
         
         keyboard = [
-            [InlineKeyboardButton("ℹ️ מידע", callback_data='info')],
-            [InlineKeyboardButton("📍 איתור IP", callback_data='locate_demo')],
-            [InlineKeyboardButton("🔍 סריקת פורטים", callback_data='scan_demo')],
-            [InlineKeyboardButton("🏓 Ping Test", callback_data='ping_demo')],
-            [InlineKeyboardButton("⚙️ הגדרות", callback_data='settings')],
+            [InlineKeyboardButton("🔍 כלי רשת", callback_data='network_tools')],
+            [InlineKeyboardButton("� דוגמאות מהירות", callback_data='quick_examples')],
+            [InlineKeyboardButton("❓ עזרה ומידע", callback_data='help_info')],
             [InlineKeyboardButton("📞 יצירת קשר", callback_data='contact')]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -189,38 +195,276 @@ class TelegramBot:
         logger.info(f"🔘 כפתור נלחץ: '{query.data}' - משתמש: {user_name} (@{username}) | ID: {user_id}")
         user_logger.info(f"🔘 כפתור נלחץ: '{query.data}' - משתמש: {user_name} (@{username}) | ID: {user_id}")
 
-        if query.data == 'info':
-            await query.edit_message_text("ℹ️ זהו בוט טלגרם פשוט וחכם שנבנה בפייתון!")
-        elif query.data == 'settings':
-            await query.edit_message_text("⚙️ כאן תוכל לשנות הגדרות (בפיתוח)")
-        elif query.data == 'locate_demo':
-            await query.edit_message_text("📍 איתור IP - השתמש בפקודה:\n\n/locate 8.8.8.8\n/locate google.com\n\nהבוט יחפש את המיקום הגאוגרפי של ה-IP!")
-        elif query.data == 'scan_demo':
+        # Main menu options
+        if query.data == 'network_tools':
+            # Network tools submenu
+            keyboard = [
+                [InlineKeyboardButton("📍 איתור IP/דומיין", callback_data='locate_demo')],
+                [InlineKeyboardButton("🔍 סריקת פורטים", callback_data='scan_menu')],
+                [InlineKeyboardButton("🏓 בדיקת Ping", callback_data='ping_demo')],
+                [InlineKeyboardButton("🔙 חזרה לתפריט ראשי", callback_data='main_menu')]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
             await query.edit_message_text(
-                "🔍 **סריקת פורטים**\n\n"
-                "השתמש בפקודה:\n"
-                "`/scan <IP או דומיין> [סוג]`\n\n"
-                "🔹 **דוגמאות:**\n"
-                "• `/scan google.com`\n"
-                "• `/scan 192.168.1.1 quick`\n"
-                "• `/scan github.com top100`\n\n"
-                "🔹 **סוגי סריקה:**\n"
-                "• `common` - פורטים נפוצים (ברירת מחדל)\n"
-                "• `quick` - פורטים חשובים בלבד\n"
-                "• `top100` - 100 הפורטים הנפוצים\n\n"
-                "⚠️ **לשימוש חוקי בלבד!**",
+                "🛠️ **כלי רשת מתקדמים**\n\n"
+                "בחר את הכלי שברצונך להשתמש בו:",
+                reply_markup=reply_markup
+            )
+        
+        elif query.data == 'scan_menu':
+            # Port scanning submenu with different scan types
+            keyboard = [
+                [InlineKeyboardButton("⚡ סריקה מהירה", callback_data='scan_quick_help')],
+                [InlineKeyboardButton("🔍 סריקה נפוצה", callback_data='scan_common_help')],
+                [InlineKeyboardButton("💯 Top 100 פורטים", callback_data='scan_top100_help')],
+                [InlineKeyboardButton("🌐 Web Services", callback_data='scan_web_help')],
+                [InlineKeyboardButton("🔥 סריקה מלאה (1-65535)", callback_data='scan_full_help')],
+                [InlineKeyboardButton("🔙 חזרה", callback_data='network_tools')]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await query.edit_message_text(
+                "🔍 **סוגי סריקת פורטים**\n\n"
+                "בחר את סוג הסריקה המתאים לך:\n\n"
+                "⚡ **מהירה** - 13 פורטים חשובים\n"
+                "🔍 **נפוצה** - 19 פורטים נפוצים\n" 
+                "💯 **Top 100** - 100 הפורטים הנפוצים\n"
+                "🌐 **Web** - פורטי שירותי אינטרנט\n"
+                "🔥 **מלאה** - כל הפורטים (איטית מאוד!)\n\n"
+                "💡 **טיפ:** התחל עם סריקה מהירה",
+                reply_markup=reply_markup,
                 parse_mode='Markdown'
             )
-        elif query.data == 'ping_demo':
+        
+        elif query.data == 'quick_examples':
+            # Quick examples submenu
+            keyboard = [
+                [InlineKeyboardButton("🔗 דוגמאות איתור IP", callback_data='examples_locate')],
+                [InlineKeyboardButton("🔍 דוגמאות סריקה", callback_data='examples_scan')], 
+                [InlineKeyboardButton("🏓 דוגמאות Ping", callback_data='examples_ping')],
+                [InlineKeyboardButton("🔙 חזרה לתפריט ראשי", callback_data='main_menu')]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
             await query.edit_message_text(
-                "🏓 **Ping Test**\n\n"
-                "בדיקת זמינות שרת:\n"
-                "`/ping <IP או דומיין>`\n\n"
-                "🔹 **דוגמאות:**\n"
+                "📚 **דוגמאות שימוש מהיר**\n\n"
+                "בחר קטגוריה לצפייה בדוגמאות:",
+                reply_markup=reply_markup
+            )
+        
+        elif query.data == 'help_info':
+            # Help and info submenu
+            keyboard = [
+                [InlineKeyboardButton("📋 רשימת פקודות", callback_data='help_commands')],
+                [InlineKeyboardButton("ℹ️ אודות הבוט", callback_data='about_bot')],
+                [InlineKeyboardButton("🛡️ אבטחה ואתיקה", callback_data='security_info')],
+                [InlineKeyboardButton("🔙 חזרה לתפריט ראשי", callback_data='main_menu')]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await query.edit_message_text(
+                "❓ **מידע ועזרה**\n\n"
+                "בחר נושא למידע נוסף:",
+                reply_markup=reply_markup
+            )
+        
+        # Back to main menu
+        elif query.data == 'main_menu':
+            keyboard = [
+                [InlineKeyboardButton("🔍 כלי רשת", callback_data='network_tools')],
+                [InlineKeyboardButton("📊 דוגמאות מהירות", callback_data='quick_examples')],
+                [InlineKeyboardButton("❓ עזרה ומידע", callback_data='help_info')],
+                [InlineKeyboardButton("📞 יצירת קשר", callback_data='contact')]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await query.edit_message_text(
+                "🎯 **תפריט ראשי**\n\n"
+                "בחר אפשרות:",
+                reply_markup=reply_markup
+            )
+        
+        # Detailed scan type help
+        elif query.data == 'scan_quick_help':
+            await query.edit_message_text(
+                "⚡ **סריקה מהירה**\n\n"
+                "סורקת 13 פורטים חשובים בלבד\n"
+                "⏱️ זמן סריקה: ~3-5 שניות\n\n"
+                "**שימוש:**\n"
+                "`/scan google.com quick`\n"
+                "`/scan 192.168.1.1 quick`\n\n"
+                "**פורטים נסרקים:**\n"
+                "21 (FTP), 22 (SSH), 23 (Telnet)\n"
+                "25 (SMTP), 53 (DNS), 80 (HTTP)\n"
+                "110 (POP3), 143 (IMAP), 443 (HTTPS)\n"
+                "993 (IMAPS), 995 (POP3S)\n"
+                "3389 (RDP), 8080 (HTTP-Alt)",
+                parse_mode='Markdown'
+            )
+        
+        elif query.data == 'scan_common_help':
+            await query.edit_message_text(
+                "🔍 **סריקה נפוצה** (ברירת מחדל)\n\n"
+                "סורקת 19 פורטים הכי נפוצים\n"
+                "⏱️ זמן סריקה: ~5-8 שניות\n\n"
+                "**שימוש:**\n"
+                "`/scan google.com`\n"
+                "`/scan github.com common`\n\n"
+                "**כוללת:** FTP, SSH, HTTP/HTTPS, Email, DNS, Databases ועוד",
+                parse_mode='Markdown'
+            )
+        
+        elif query.data == 'scan_top100_help':
+            await query.edit_message_text(
+                "💯 **Top 100 פורטים**\n\n"
+                "סורקת 100 הפורטים הנפוצים ביותר\n"
+                "⏱️ זמן סריקה: ~15-30 שניות\n\n"
+                "**שימוש:**\n"
+                "`/scan target.com top100`\n\n"
+                "**מומלצ עבור:** שרתים, אתרים, בדיקות אבטחה מקיפות",
+                parse_mode='Markdown'
+            )
+        
+        elif query.data == 'scan_web_help':
+            await query.edit_message_text(
+                "🌐 **Web Services**\n\n"
+                "מתמחה בפורטי שירותי אינטרנט\n"
+                "⏱️ זמן סריקה: ~3-5 שניות\n\n"
+                "**שימוש:**\n"
+                "`/scan example.com web`\n\n"
+                "**פורטים:** 80, 443, 8000, 8008, 8080, 8081, 8443, 8888, 3000-5001, 9000-9001\n\n"
+                "**מושלם עבור:** אתרים, API servers, Dev servers",
+                parse_mode='Markdown'
+            )
+        
+        elif query.data == 'scan_full_help':
+            keyboard = [
+                [InlineKeyboardButton("⚠️ אני מבין - המשך", callback_data='scan_full_confirm')],
+                [InlineKeyboardButton("🔙 חזרה", callback_data='scan_menu')]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await query.edit_message_text(
+                "� **סריקה מלאה (1-65535)**\n\n"
+                "⚠️ **אזהרה חשובה!**\n\n"
+                "• סורקת **כל** 65,535 פורטים\n"
+                "• יכולה לקחת **5-15 דקות**\n"
+                "• עלולה להעמיס על השרת היעד\n"
+                "• יכולה להפעיל מערכות אבטחה\n\n"
+                "🛡️ **השתמש רק עבור:**\n"
+                "• שרתים שלך\n"
+                "• רשתות פנימיות\n"
+                "• בדיקות מורשות\n\n"
+                "**שימוש:** `/scan target.com full`",
+                reply_markup=reply_markup,
+                parse_mode='Markdown'
+            )
+        
+        elif query.data == 'scan_full_confirm':
+            await query.edit_message_text(
+                "🔥 **מידע על סריקה מלאה**\n\n"
+                "**פקודה:** `/scan <target> full`\n\n"
+                "**דוגמה:** `/scan 192.168.1.1 full`\n\n"
+                "⚠️ **זכור:** השתמש באחריות ורק על מערכות מורשות!\n\n"
+                "⏳ **סבלנות:** התהליך יכול לקחת זמן רב...",
+                parse_mode='Markdown'
+            )
+        
+        # Examples sections
+        elif query.data == 'examples_locate':
+            await query.edit_message_text(
+                "🔗 **דוגמאות איתור IP/דומיין**\n\n"
+                "**פקודה:** `/locate <target>`\n\n"
+                "🌍 **אתרים פופולריים:**\n"
+                "• `/locate google.com`\n"
+                "• `/locate facebook.com`\n"
+                "• `/locate github.com`\n\n"
+                "🏠 **שרתי DNS:**\n"
+                "• `/locate 8.8.8.8` (Google)\n"
+                "• `/locate 1.1.1.1` (Cloudflare)\n\n"
+                "🏢 **רשתות פנימיות:**\n"
+                "• `/locate 192.168.1.1`\n"
+                "• `/locate 10.0.0.1`",
+                parse_mode='Markdown'
+            )
+        
+        elif query.data == 'examples_scan':
+            await query.edit_message_text(
+                "� **דוגמאות סריקת פורטים**\n\n"
+                "⚡ **מהיר:**\n"
+                "• `/scan google.com quick`\n"
+                "• `/scan 192.168.1.1 quick`\n\n"
+                "🔍 **רגיל:**\n"
+                "• `/scan github.com`\n"
+                "• `/scan example.com common`\n\n"
+                "🌐 **Web:**\n"
+                "• `/scan mysite.com web`\n\n"
+                "💯 **מקיף:**\n"
+                "• `/scan server.local top100`\n\n"
+                "� **מלא (זהירות!):**\n"
+                "• `/scan 192.168.1.100 full`",
+                parse_mode='Markdown'
+            )
+        
+        elif query.data == 'examples_ping':
+            await query.edit_message_text(
+                "🏓 **דוגמאות בדיקת Ping**\n\n"
+                "**פקודה:** `/ping <target>`\n\n"
+                "🌐 **אתרים:**\n"
                 "• `/ping google.com`\n"
+                "• `/ping github.com`\n"
+                "• `/ping stackoverflow.com`\n\n"
+                "🔧 **שרתי DNS:**\n"
                 "• `/ping 8.8.8.8`\n"
-                "• `/ping github.com`\n\n"
-                "הבוט יבדוק אם השרת זמין ויציג זמן תגובה.",
+                "• `/ping 1.1.1.1`\n\n"
+                "🏠 **רשת מקומית:**\n"
+                "• `/ping 192.168.1.1`\n"
+                "• `/ping router.local`",
+                parse_mode='Markdown'
+            )
+        
+        elif query.data == 'help_commands':
+            await query.edit_message_text(
+                "📋 **רשימת פקודות מלאה**\n\n"
+                "🔹 **בסיסיות:**\n"
+                "• `/start` - התחלה\n"
+                "• `/help` - עזרה\n"
+                "• `/menu` - תפריט\n\n"
+                "🔹 **כלי רשת:**\n"
+                "• `/locate <target>` - איתור IP\n"
+                "• `/scan <target> [type]` - סריקת פורטים\n"
+                "• `/ping <target>` - בדיקת זמינות\n\n"
+                "🔹 **סוגי סריקה:**\n"
+                "`quick`, `common`, `top100`, `web`, `full`",
+                parse_mode='Markdown'
+            )
+        
+        elif query.data == 'about_bot':
+            await query.edit_message_text(
+                "🤖 **אודות הבוט**\n\n"
+                "**שם:** VB Network Tools Bot\n"
+                "**גרסה:** 2.0\n"
+                "**מפתח:** @VB_International\n\n"
+                "�️ **טכנולוגיות:**\n"
+                "• Python 3.13\n"
+                "• python-telegram-bot\n"
+                "• Railway Cloud\n\n"
+                "🎯 **מטרה:**\n"
+                "כלי רשת נוח ובטוח לבדיקות אבטחה ואבחון רשתות",
+                parse_mode='Markdown'
+            )
+        
+        elif query.data == 'security_info':
+            await query.edit_message_text(
+                "🛡️ **אבטחה ואתיקה**\n\n"
+                "⚖️ **חוקים:**\n"
+                "• השתמש רק במערכות מורשות\n"
+                "• אל תסרוק רשתות זרות\n"
+                "• כבד מדיניות שימוש\n\n"
+                "🎯 **שימושים חוקיים:**\n"
+                "• בדיקת הרשת שלך\n"
+                "• אבחון בעיות\n"
+                "• בדיקות אבטחה מורשות\n\n"
+                "❌ **אל תשתמש עבור:**\n"
+                "• חדירה לא מורשת\n"
+                "• סריקת רשתות זרות\n"
+                "• פעילות בלתי חוקית\n\n"
+                "⚠️ **הבוט לא אחראי לשימוש לא נכון**",
                 parse_mode='Markdown'
             )
         elif query.data == 'locate_another':
@@ -391,16 +635,31 @@ class TelegramBot:
         logger.info(f"🔍 /scan '{target}' ({scan_type}) - משתמש: {user_name} (@{username}) | ID: {user_id}")
         user_logger.info(f"🔍 /scan '{target}' ({scan_type}) - משתמש: {user_name} (@{username}) | ID: {user_id}")
         
-        # Show processing message
+        # Get ports count for progress indication
+        ports = self.network_tools.get_port_ranges(scan_type)
+        ports_count = len(ports)
+        
+        # Estimate time based on scan type
+        time_estimates = {
+            "quick": "3-5 שניות",
+            "common": "5-8 שניות", 
+            "top100": "15-30 שניות",
+            "web": "3-5 שניות",
+            "full": "5-15 דקות ⚠️"
+        }
+        estimated_time = time_estimates.get(scan_type, "מספר שניות")
+        
+        # Show processing message with better UX
         processing_msg = await update.message.reply_text(
-            f"🔍 סורק פורטים עבור: {target}\n"
-            f"📊 סוג סריקה: {scan_type}\n"
-            f"⏳ אנא המתן... זה יכול לקחת מספר שניות"
+            f"🔍 **סורק פורטים עבור:** `{target}`\n\n"
+            f"📊 **סוג סריקה:** {scan_type.upper()}\n"
+            f"🎯 **פורטים לסריקה:** {ports_count:,}\n"
+            f"⏱️ **זמן משוער:** {estimated_time}\n\n"
+            f"⏳ מתחיל סריקה... אנא המתן",
+            parse_mode='Markdown'
         )
         
         try:
-            # Get ports to scan based on type
-            ports = self.network_tools.get_port_ranges(scan_type)
             
             # Perform the scan
             result = await self.network_tools.scan_ports_async(target, ports)
