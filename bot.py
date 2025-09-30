@@ -16,6 +16,9 @@ from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQu
 # Import IP location functions
 from locate_ip import analyze_single_ip, geoip_ipapi, geoip_ipinfo
 
+# Import network tools
+from network_tools import NetworkTools, format_port_scan_result, format_ping_result
+
 # Load environment variables
 load_dotenv()
 
@@ -70,6 +73,7 @@ class TelegramBot:
         """Initialize the bot with token"""
         self.token = token
         self.application = Application.builder().token(token).build()
+        self.network_tools = NetworkTools()
         self.setup_handlers()
 
     def setup_handlers(self):
@@ -79,6 +83,8 @@ class TelegramBot:
         self.application.add_handler(CommandHandler("help", self.help_command))
         self.application.add_handler(CommandHandler("menu", self.menu_command))
         self.application.add_handler(CommandHandler("locate", self.locate_command))
+        self.application.add_handler(CommandHandler("scan", self.port_scan_command))
+        self.application.add_handler(CommandHandler("ping", self.ping_command))
         
         # Callback query handler for inline keyboards
         self.application.add_handler(CallbackQueryHandler(self.button_callback))
@@ -123,14 +129,26 @@ class TelegramBot:
         help_text = """
 📋 פקודות זמינות:
 
+🔹 **בסיסיות:**
 /start - התחלת השיחה עם הבוט
 /help - הצגת עזרה
 /menu - תפריט אינטראקטיבי
-/locate <IP או דומיין> - איתור מיקום IP
 
-דוגמאות איתור IP:
+🔹 **כלי רשת:**
+/locate <IP או דומיין> - איתור מיקום IP
+/scan <IP או דומיין> [סוג] - בדיקת פורטים פתוחים
+/ping <IP או דומיין> - בדיקת זמינות שרת
+
+🔹 **דוגמאות:**
 /locate 8.8.8.8
-/locate google.com
+/scan google.com
+/scan 192.168.1.1 quick
+/ping github.com
+
+🔹 **סוגי סריקה:**
+• common - פורטים נפוצים (ברירת מחדל)
+• quick - פורטים חשובים בלבד
+• top100 - 100 הפורטים הנפוצים ביותר
 
 פשוט שלח לי הודעה ואני אענה לך!
 """
@@ -147,6 +165,8 @@ class TelegramBot:
         keyboard = [
             [InlineKeyboardButton("ℹ️ מידע", callback_data='info')],
             [InlineKeyboardButton("📍 איתור IP", callback_data='locate_demo')],
+            [InlineKeyboardButton("🔍 סריקת פורטים", callback_data='scan_demo')],
+            [InlineKeyboardButton("🏓 Ping Test", callback_data='ping_demo')],
             [InlineKeyboardButton("⚙️ הגדרות", callback_data='settings')],
             [InlineKeyboardButton("📞 יצירת קשר", callback_data='contact')]
         ]
@@ -167,6 +187,7 @@ class TelegramBot:
         username = update.effective_user.username or "ללא שם משתמש"
         
         logger.info(f"🔘 כפתור נלחץ: '{query.data}' - משתמש: {user_name} (@{username}) | ID: {user_id}")
+        user_logger.info(f"🔘 כפתור נלחץ: '{query.data}' - משתמש: {user_name} (@{username}) | ID: {user_id}")
 
         if query.data == 'info':
             await query.edit_message_text("ℹ️ זהו בוט טלגרם פשוט וחכם שנבנה בפייתון!")
@@ -174,6 +195,34 @@ class TelegramBot:
             await query.edit_message_text("⚙️ כאן תוכל לשנות הגדרות (בפיתוח)")
         elif query.data == 'locate_demo':
             await query.edit_message_text("📍 איתור IP - השתמש בפקודה:\n\n/locate 8.8.8.8\n/locate google.com\n\nהבוט יחפש את המיקום הגאוגרפי של ה-IP!")
+        elif query.data == 'scan_demo':
+            await query.edit_message_text(
+                "🔍 **סריקת פורטים**\n\n"
+                "השתמש בפקודה:\n"
+                "`/scan <IP או דומיין> [סוג]`\n\n"
+                "🔹 **דוגמאות:**\n"
+                "• `/scan google.com`\n"
+                "• `/scan 192.168.1.1 quick`\n"
+                "• `/scan github.com top100`\n\n"
+                "🔹 **סוגי סריקה:**\n"
+                "• `common` - פורטים נפוצים (ברירת מחדל)\n"
+                "• `quick` - פורטים חשובים בלבד\n"
+                "• `top100` - 100 הפורטים הנפוצים\n\n"
+                "⚠️ **לשימוש חוקי בלבד!**",
+                parse_mode='Markdown'
+            )
+        elif query.data == 'ping_demo':
+            await query.edit_message_text(
+                "🏓 **Ping Test**\n\n"
+                "בדיקת זמינות שרת:\n"
+                "`/ping <IP או דומיין>`\n\n"
+                "🔹 **דוגמאות:**\n"
+                "• `/ping google.com`\n"
+                "• `/ping 8.8.8.8`\n"
+                "• `/ping github.com`\n\n"
+                "הבוט יבדוק אם השרת זמין ויציג זמן תגובה.",
+                parse_mode='Markdown'
+            )
         elif query.data == 'locate_another':
             await query.edit_message_text(
                 "🔍 **איתור IP חדש**\n\n"
@@ -183,6 +232,28 @@ class TelegramBot:
                 "• `/locate 1.1.1.1`\n"
                 "• `/locate facebook.com`\n"
                 "• `/locate 192.168.1.1`",
+                parse_mode='Markdown'
+            )
+        elif query.data == 'scan_another':
+            await query.edit_message_text(
+                "🔍 **סריקת פורטים חדשה**\n\n"
+                "השתמש בפקודה:\n"
+                "`/scan <IP או דומיין> [סוג]`\n\n"
+                "דוגמאות:\n"
+                "• `/scan google.com`\n"
+                "• `/scan 192.168.1.1 quick`\n"
+                "• `/scan github.com top100`",
+                parse_mode='Markdown'
+            )
+        elif query.data == 'ping_another':
+            await query.edit_message_text(
+                "🏓 **Ping Test חדש**\n\n"
+                "השתמש בפקודה:\n"
+                "`/ping <IP או דומיין>`\n\n"
+                "דוגמאות:\n"
+                "• `/ping google.com`\n"
+                "• `/ping 8.8.8.8`\n"
+                "• `/ping github.com`",
                 parse_mode='Markdown'
             )
         elif query.data == 'contact':
@@ -287,6 +358,142 @@ class TelegramBot:
             await processing_msg.edit_text(
                 f"❌ מצטער {user_name}, אירעה שגיאה בחיפוש המיקום של {target}\n"
                 f"נסה שוב מאוחר יותר או עם IP/דומיין אחר."
+            )
+
+    async def port_scan_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /scan command for port scanning"""
+        user_name = update.effective_user.first_name
+        user_id = update.effective_user.id
+        username = update.effective_user.username or "ללא שם משתמש"
+        
+        # Check if target was provided
+        if not context.args:
+            logger.info(f"🔍 /scan (ללא פרמטר) - משתמש: {user_name} (@{username}) | ID: {user_id}")
+            await update.message.reply_text(
+                "🔍 **סריקת פורטים**\n\n"
+                "שימוש: `/scan <IP או דומיין> [סוג]`\n\n"
+                "🔹 **דוגמאות:**\n"
+                "• `/scan google.com`\n"
+                "• `/scan 192.168.1.1 quick`\n"
+                "• `/scan github.com top100`\n\n"
+                "🔹 **סוגי סריקה:**\n"
+                "• `common` - פורטים נפוצים (ברירת מחדל)\n"
+                "• `quick` - פורטים חשובים בלבד\n"
+                "• `top100` - 100 הפורטים הנפוצים\n\n"
+                "⚠️ **לשימוש חוקי בלבד!**",
+                parse_mode='Markdown'
+            )
+            return
+        
+        target = context.args[0]
+        scan_type = context.args[1] if len(context.args) > 1 else "common"
+        
+        logger.info(f"🔍 /scan '{target}' ({scan_type}) - משתמש: {user_name} (@{username}) | ID: {user_id}")
+        user_logger.info(f"🔍 /scan '{target}' ({scan_type}) - משתמש: {user_name} (@{username}) | ID: {user_id}")
+        
+        # Show processing message
+        processing_msg = await update.message.reply_text(
+            f"🔍 סורק פורטים עבור: {target}\n"
+            f"📊 סוג סריקה: {scan_type}\n"
+            f"⏳ אנא המתן... זה יכול לקחת מספר שניות"
+        )
+        
+        try:
+            # Get ports to scan based on type
+            ports = self.network_tools.get_port_ranges(scan_type)
+            
+            # Perform the scan
+            result = await self.network_tools.scan_ports_async(target, ports)
+            
+            # Format results
+            result_text = format_port_scan_result(result)
+            
+            # Create inline keyboard for additional options
+            keyboard = [
+                [InlineKeyboardButton("🔄 סרוק מחדש", callback_data='scan_another')],
+                [InlineKeyboardButton("🏓 Ping Test", callback_data='ping_demo')],
+                [InlineKeyboardButton("📍 איתור IP", callback_data='locate_demo')]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await processing_msg.edit_text(
+                result_text,
+                parse_mode='Markdown',
+                reply_markup=reply_markup
+            )
+            
+        except Exception as e:
+            logger.error(f"Error in port_scan_command: {e}")
+            await processing_msg.edit_text(
+                f"❌ מצטער {user_name}, אירעה שגיאה בסריקת {target}\n\n"
+                f"🔄 נסה שוב מאוחר יותר או עם target אחר.\n\n"
+                f"📝 וודא שהפורמט נכון:\n"
+                f"`/scan {target} [common/quick/top100]`",
+                parse_mode='Markdown'
+            )
+
+    async def ping_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /ping command for ping tests"""
+        user_name = update.effective_user.first_name
+        user_id = update.effective_user.id
+        username = update.effective_user.username or "ללא שם משתמש"
+        
+        # Check if target was provided
+        if not context.args:
+            logger.info(f"🏓 /ping (ללא פרמטר) - משתמש: {user_name} (@{username}) | ID: {user_id}")
+            await update.message.reply_text(
+                "🏓 **Ping Test**\n\n"
+                "בדיקת זמינות שרת:\n"
+                "`/ping <IP או דומיין>`\n\n"
+                "🔹 **דוגמאות:**\n"
+                "• `/ping google.com`\n"
+                "• `/ping 8.8.8.8`\n"
+                "• `/ping github.com`\n\n"
+                "הבוט יבדוק אם השרת זמין ויציג זמן תגובה.",
+                parse_mode='Markdown'
+            )
+            return
+        
+        target = context.args[0]
+        
+        logger.info(f"🏓 /ping '{target}' - משתמש: {user_name} (@{username}) | ID: {user_id}")
+        user_logger.info(f"🏓 /ping '{target}' - משתמש: {user_name} (@{username}) | ID: {user_id}")
+        
+        # Show processing message
+        processing_msg = await update.message.reply_text(
+            f"🏓 בודק זמינות עבור: {target}\n"
+            f"⏳ אנא המתן..."
+        )
+        
+        try:
+            # Perform ping test
+            result = await self.network_tools.ping_host(target)
+            
+            # Format results
+            result_text = format_ping_result(result)
+            
+            # Create inline keyboard for additional options
+            keyboard = [
+                [InlineKeyboardButton("🔄 Ping מחדש", callback_data='ping_another')],
+                [InlineKeyboardButton("🔍 סריקת פורטים", callback_data='scan_demo')],
+                [InlineKeyboardButton("📍 איתור IP", callback_data='locate_demo')]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await processing_msg.edit_text(
+                result_text,
+                parse_mode='Markdown',
+                reply_markup=reply_markup
+            )
+            
+        except Exception as e:
+            logger.error(f"Error in ping_command: {e}")
+            await processing_msg.edit_text(
+                f"❌ מצטער {user_name}, אירעה שגיאה ב-ping ל-{target}\n\n"
+                f"🔄 נסה שוב מאוחר יותר או עם target אחר.\n\n"
+                f"📝 וודא שהפורמט נכון:\n"
+                f"`/ping {target}`",
+                parse_mode='Markdown'
             )
 
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
