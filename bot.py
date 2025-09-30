@@ -456,6 +456,7 @@ class TelegramBot:
         # Send processing message
         processing_msg = await update.message.reply_text(
             f"📱 בודק את המספר {phone_number} במדינה {COUNTRY_CODES[country]['name']}...\n"
+            f"🔍 פונה לבוט TrueCaller לקבלת מידע...\n"
             f"⏳ אנא המתן..."
         )
         
@@ -475,11 +476,12 @@ class TelegramBot:
             await processing_msg.edit_text(
                 f"📱 בודק את המספר {phone_number}...\n"
                 f"🔄 מספר בפורמט בינלאומי: {formatted_number}\n"
-                f"🔍 מחפש מידע..."
+                f"🤖 שולח בקשה לבוט TrueCaller...\n"
+                f"� מחכה לתשובה..."
             )
             
-            # Lookup phone information using TrueCaller bot approach
-            phone_result = phone_checker.check_phone_via_truecaller_bot(formatted_number)
+            # Lookup phone information using real TrueCaller bot
+            phone_result = phone_checker.check_phone_via_truecaller_bot(formatted_number, self.token)
             
             if not phone_result or not phone_result.get('success'):
                 await processing_msg.edit_text(

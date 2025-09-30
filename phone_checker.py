@@ -75,19 +75,25 @@ class PhoneNumberChecker:
         
         return formatted, is_valid
 
-    def lookup_truecaller_bot(self, phone_number: str) -> Optional[Dict]:
+    def lookup_truecaller_bot(self, phone_number: str, bot_token: str = None) -> Optional[Dict]:
         """
-        Query TrueCaller Bot via Telegram simulation for phone number information
+        Query actual TrueCaller Bot via Telegram for phone number information
         """
         try:
-            # This method simulates querying TrueCaller bot and parsing the response
+            # Method 1: Try to query real TrueCaller bot if we have bot token
+            if bot_token:
+                print(f"Attempting to query TrueCaller bot for number: {phone_number}")
+                result = self._query_truecaller_bot_real(phone_number, bot_token)
+                if result:
+                    print("Successfully got response from TrueCaller bot")
+                    return result
+                else:
+                    print("No response from TrueCaller bot, falling back to alternatives")
+            else:
+                print("No bot token provided for TrueCaller bot query")
             
-            # Method 1: Try to query TrueCaller bot simulation
-            result = self._query_truecaller_bot(phone_number)
-            if result:
-                return result
-            
-            # Method 2: Fallback to other phone lookup services
+            # Method 2: Fallback to alternative lookup services
+            print("Using alternative phone lookup methods")
             result = self._try_alternative_lookup(phone_number)
             return result
             
@@ -95,32 +101,213 @@ class PhoneNumberChecker:
             print(f"Error in TrueCaller lookup: {e}")
             return None
 
-    def _query_truecaller_bot(self, phone_number: str) -> Optional[Dict]:
+    def _find_truecaller_bot(self, bot_token: str) -> Optional[str]:
         """
-        Query TrueCaller Bot via Telegram API simulation
+        Find TrueCaller bot chat_id or username
         """
         try:
-            # This simulates sending a message to TrueCaller bot and parsing response
-            # In a real implementation, you would use Telegram Bot API to send message to TrueCaller bot
-            
-            # Clean phone number
-            clean_number = phone_number.replace('+', '').replace(' ', '').replace('-', '')
-            
-            # Try multiple phone lookup APIs that provide TrueCaller-like data
-            apis_to_try = [
-                self._try_opencnam_api(phone_number),
-                self._try_numverify_simulation(clean_number),
-                self._try_carrier_lookup(clean_number)
+            # List of possible TrueCaller bot usernames to try
+            possible_bots = [
+                "@TrueCallerBot",
+                "@truecaller_bot", 
+                "@TrueCaller",
+                "@GetContactBot",
+                "@caller_id_bot"
             ]
             
-            for api_result in apis_to_try:
-                if api_result and api_result.get('valid'):
-                    return api_result
+            # Try each bot to see which one responds
+            for bot_username in possible_bots:
+                try:
+                    # Try to get bot info
+                    send_url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+                    test_data = {
+                        'chat_id': bot_username,
+                        'text': '/start'
+                    }
+                    
+                    response = self.session.post(send_url, json=test_data, timeout=5)
+                    if response.status_code == 200:
+                        return bot_username
+                        
+                except Exception:
+                    continue
                     
             return None
             
         except Exception as e:
-            print(f"Error querying TrueCaller bot: {e}")
+            print(f"Error finding TrueCaller bot: {e}")
+            return None
+
+    def _query_truecaller_bot_real(self, phone_number: str, bot_token: str) -> Optional[Dict]:
+        """
+        Actually send message to TrueCaller Bot via Telegram API and get response
+        """
+        try:
+            import time
+            
+            # First find TrueCaller bot
+            truecaller_bot = self._find_truecaller_bot(bot_token)
+            if not truecaller_bot:
+                print("Could not find TrueCaller bot")
+                return None
+            
+            print(f"Found TrueCaller bot: {truecaller_bot}")
+            
+            # Get current message offset to avoid old messages
+            updates_url = f"https://api.telegram.org/bot{bot_token}/getUpdates"
+            updates_response = self.session.get(updates_url, timeout=10)
+            
+            current_offset = 0
+            if updates_response.status_code == 200:
+                updates_data = updates_response.json()
+                if updates_data.get('result'):
+                    current_offset = updates_data['result'][-1].get('update_id', 0) + 1
+            
+            # Send message to TrueCaller bot
+            send_url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+            
+            # Send the phone number to TrueCaller bot
+            message_data = {
+                'chat_id': truecaller_bot,
+                'text': phone_number
+            }
+            
+            # Send message
+            response = self.session.post(send_url, json=message_data, timeout=10)
+            
+            if response.status_code != 200:
+                print(f"Failed to send message to TrueCaller bot: {response.status_code}")
+                response_data = response.json()
+                print(f"Error details: {response_data}")
+                return None
+                
+            print(f"Message sent successfully to {truecaller_bot}")
+                
+            # Wait for TrueCaller bot to respond
+            time.sleep(5)
+            
+            # Get new updates to receive TrueCaller bot's response
+            updates_with_offset_url = f"{updates_url}?offset={current_offset}"
+            updates_response = self.session.get(updates_with_offset_url, timeout=10)
+            
+            if updates_response.status_code != 200:
+                print("Failed to get updates from Telegram")
+                return None
+                
+            updates_data = updates_response.json()
+            print(f"Received {len(updates_data.get('result', []))} new updates")
+            
+            # Parse TrueCaller bot's response
+            return self._parse_truecaller_response(updates_data, phone_number)
+            
+        except Exception as e:
+            print(f"Error querying real TrueCaller bot: {e}")
+            return None
+
+    def _parse_truecaller_response(self, updates_data: dict, phone_number: str) -> Optional[Dict]:
+        """
+        Parse TrueCaller bot's response from Telegram updates
+        """
+        try:
+            if not updates_data.get('ok') or not updates_data.get('result'):
+                print("No valid updates received")
+                return None
+                
+            print(f"Processing {len(updates_data['result'])} updates...")
+                
+            # Look for messages from TrueCaller bot
+            for update in reversed(updates_data['result']):
+                message = update.get('message', {})
+                from_user = message.get('from', {})
+                response_text = message.get('text', '')
+                
+                print(f"Checking message from: {from_user.get('username', 'Unknown')}")
+                print(f"Message text: {response_text[:100]}...")
+                
+                # Check if this looks like a TrueCaller bot response
+                if (from_user.get('is_bot') and 
+                    ('truecaller' in from_user.get('username', '').lower() or
+                     'caller' in from_user.get('first_name', '').lower() or
+                     any(keyword in response_text.lower() for keyword in ['name:', 'caller:', 'country:', 'carrier:']))):
+                    
+                    print(f"Found TrueCaller response: {response_text}")
+                    
+                    # Parse the TrueCaller response text
+                    parsed_info = self._extract_info_from_truecaller_text(response_text, phone_number)
+                    if parsed_info:
+                        return parsed_info
+                        
+            print("No TrueCaller bot response found in updates")
+            return None
+            
+        except Exception as e:
+            print(f"Error parsing TrueCaller response: {e}")
+            return None
+
+    def _extract_info_from_truecaller_text(self, text: str, phone_number: str) -> Optional[Dict]:
+        """
+        Extract information from TrueCaller bot's response text
+        """
+        try:
+            result = {
+                'number': phone_number,
+                'valid': True,
+                'name': 'לא ידוע',
+                'carrier': 'לא ידוע',
+                'line_type': 'לא ידוע',
+                'country_name': 'לא ידוע',
+                'spam_score': 0,
+                'source': 'TrueCaller Bot',
+                'raw_response': text
+            }
+            
+            # Extract name (looking for patterns like "Name: John Doe")
+            import re
+            
+            name_patterns = [
+                r'Name:\s*([^\n\r]+)',
+                r'שם:\s*([^\n\r]+)',
+                r'Called ID:\s*([^\n\r]+)',
+                r'Caller:\s*([^\n\r]+)'
+            ]
+            
+            for pattern in name_patterns:
+                match = re.search(pattern, text, re.IGNORECASE)
+                if match:
+                    result['name'] = match.group(1).strip()
+                    break
+            
+            # Extract carrier info
+            carrier_patterns = [
+                r'Carrier:\s*([^\n\r]+)',
+                r'ספק:\s*([^\n\r]+)',
+                r'Operator:\s*([^\n\r]+)'
+            ]
+            
+            for pattern in carrier_patterns:
+                match = re.search(pattern, text, re.IGNORECASE)
+                if match:
+                    result['carrier'] = match.group(1).strip()
+                    break
+            
+            # Extract country
+            if 'Israel' in text or 'ישראל' in text:
+                result['country_name'] = 'ישראל'
+                result['country_flag'] = '🇮🇱'
+            elif 'USA' in text or 'United States' in text:
+                result['country_name'] = 'ארצות הברית'
+                result['country_flag'] = '🇺🇸'
+            
+            # Check for spam indicators
+            if any(word in text.lower() for word in ['spam', 'scam', 'fraud', 'ספאם']):
+                result['spam_score'] = 80
+            elif any(word in text.lower() for word in ['unknown', 'private', 'לא ידוע']):
+                result['spam_score'] = 20
+            
+            return result
+            
+        except Exception as e:
+            print(f"Error extracting info from TrueCaller text: {e}")
             return None
 
     def _try_opencnam_api(self, phone_number: str) -> Optional[Dict]:
@@ -445,13 +632,13 @@ class PhoneNumberChecker:
         
         return result
 
-    def check_phone_via_truecaller_bot(self, phone_number: str) -> Dict:
+    def check_phone_via_truecaller_bot(self, phone_number: str, bot_token: str = None) -> Dict:
         """
-        Main method to check phone number using TrueCaller bot approach
+        Main method to check phone number using real TrueCaller bot
         """
         try:
-            # First try to get info from TrueCaller bot
-            truecaller_info = self.lookup_truecaller_bot(phone_number)
+            # First try to get info from real TrueCaller bot
+            truecaller_info = self.lookup_truecaller_bot(phone_number, bot_token)
             
             # If TrueCaller fails, use alternative methods
             if not truecaller_info:
@@ -490,7 +677,7 @@ class PhoneNumberChecker:
             return "❌ לא נמצא מידע על המספר."
         
         # Build result message
-        result = f"📱 **בדיקת מספר טלפון** (סגנון TrueCaller)\n\n"
+        result = f"📱 **בדיקת מספר טלפון** (דרך בוט TrueCaller)\n\n"
         result += f"🔢 **מספר מקורי:** `{original_number}`\n"
         result += f"🌍 **מספר בינלאומי:** `{phone_data.get('number', phone_result.get('input_number', 'לא ידוע'))}`\n"
         
@@ -531,8 +718,9 @@ class PhoneNumberChecker:
         
         # Add disclaimer
         result += f"\n⚠️ **הערה חשובה:**\n"
-        result += f"המידע מבוסס על מסדי נתונים ציבוריים ועשוי להיות לא מדויק או לא עדכני.\n"
-        result += f"הבוט מדמה פונקציונליות של TrueCaller באמצעות מקורות חופשיים."
+        result += f"הבוט מנסה לפנות לבוט TrueCaller האמיתי בטלגרם לקבלת מידע.\n"
+        result += f"במקרה שהבוט לא זמין, המידע מתקבל ממקורות חופשיים אחרים.\n"
+        result += f"המידע עשוי להיות לא מדויק או לא עדכני."
         
         return result
 
