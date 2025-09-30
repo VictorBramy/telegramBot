@@ -28,7 +28,20 @@ logging.basicConfig(
         logging.FileHandler('bot_activity.log', encoding='utf-8')  # File output
     ]
 )
+
+# Silence noisy HTTP logs
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("telegram.ext").setLevel(logging.WARNING)
+
 logger = logging.getLogger(__name__)
+
+# Create separate logger for user activity only
+user_logger = logging.getLogger("user_activity")
+user_handler = logging.FileHandler('user_activity.log', encoding='utf-8')
+user_handler.setFormatter(logging.Formatter('%(asctime)s - %(message)s'))
+user_logger.addHandler(user_handler)
+user_logger.setLevel(logging.INFO)
+user_logger.propagate = False  # Don't send to root logger
 
 class HealthCheckHandler(BaseHTTPRequestHandler):
     """Simple health check server for Docker/cloud monitoring"""
@@ -80,6 +93,7 @@ class TelegramBot:
         username = update.effective_user.username or "ללא שם משתמש"
         
         logger.info(f"🚀 /start - משתמש: {user_name} (@{username}) | ID: {user_id}")
+        user_logger.info(f"🚀 /start - משתמש: {user_name} (@{username}) | ID: {user_id}")
         welcome_message = f"""
 שלום {user_name}! 👋
 
@@ -188,6 +202,7 @@ class TelegramBot:
         else:
             target = ' '.join(context.args)
             logger.info(f"📍 /locate '{target}' - משתמש: {user_name} (@{username}) | ID: {user_id}")
+        user_logger.info(f"📍 /locate '{target}' - משתמש: {user_name} (@{username}) | ID: {user_id}")
         
         if not context.args:
             await update.message.reply_text(
@@ -282,6 +297,7 @@ class TelegramBot:
         username = update.effective_user.username or "ללא שם משתמש"
         
         logger.info(f"💬 הודעה: '{user_message}' - משתמש: {user_name} (@{username}) | ID: {user_id}")
+        user_logger.info(f"💬 הודעה: '{user_message}' - משתמש: {user_name} (@{username}) | ID: {user_id}")
         
         # Simple auto-responses
         if "שלום" in user_message or "היי" in user_message:
@@ -306,7 +322,8 @@ class TelegramBot:
 
     def run(self):
         """Start the bot"""
-        logger.info("Starting Telegram Bot...")
+        logger.info("🤖 Starting Telegram Bot...")
+        logger.info("📊 Bot is ready to receive messages!")
         
         # Add error handler
         self.application.add_error_handler(self.error_handler)
