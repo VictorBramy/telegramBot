@@ -1,0 +1,67 @@
+# Git
+.git
+.gitignore
+
+# Documentation
+README.md
+ORACLE_DEPLOYMENT.md
+*.md
+
+# Logs
+logs/
+*.log
+
+# Cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.cache/
+.pytest_cache/
+
+# Environment
+.env.example
+*.env.local
+*.env.development
+*.env.test
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+.tmp/
+
+# Node modules (if any)
+node_modules/
+
+# Python virtual environments
+venv/
+env/
+.venv/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Coverage reports
+htmlcov/
+.coverage
+.coverage.*
+
+# Deploy scripts (don't need in container)
+deploy-oracle-cloud.sh
+
+# Local test files
+test_*.py
+tests/

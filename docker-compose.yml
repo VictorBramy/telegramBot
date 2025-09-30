@@ -1,0 +1,30 @@
+version: '3.8'
+
+services:
+  telegram-bot:
+    build: .
+    container_name: vb-international-bot
+    restart: unless-stopped
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - BOT_NAME=${BOT_NAME:-VB_International_BOT}
+      - DEBUG=${DEBUG:-False}
+    volumes:
+      - ./logs:/app/logs
+      - bot-cache:/app/.locate_ip_cache
+    networks:
+      - bot-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  bot-cache:
+    driver: local
+
+networks:
+  bot-network:
+    driver: bridge
