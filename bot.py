@@ -478,10 +478,10 @@ class TelegramBot:
                 f"🔍 מחפש מידע..."
             )
             
-            # Lookup phone information
-            phone_data = phone_checker.lookup_truecaller_style(formatted_number)
+            # Lookup phone information using TrueCaller bot approach
+            phone_result = phone_checker.check_phone_via_truecaller_bot(formatted_number)
             
-            if not phone_data:
+            if not phone_result or not phone_result.get('success'):
                 await processing_msg.edit_text(
                     f"📱 **תוצאות בדיקה למספר:** `{phone_number}`\n\n"
                     f"🔢 **מספר בינלאומי:** `{formatted_number}`\n"
@@ -493,8 +493,8 @@ class TelegramBot:
                 )
                 return
             
-            # Format and display results
-            result_text = phone_checker.format_phone_result(phone_data, phone_number)
+            # Format and display results using new format
+            result_text = phone_checker.format_phone_result(phone_result, phone_number)
             
             # Create inline keyboard for additional options
             keyboard = [

@@ -6,6 +6,7 @@ Integrates with TrueCaller-like services for phone number lookup
 import re
 import requests
 import json
+from datetime import datetime
 from typing import Dict, Optional, Tuple
 
 # Country codes mapping
@@ -74,24 +75,232 @@ class PhoneNumberChecker:
         
         return formatted, is_valid
 
-    def lookup_truecaller_style(self, phone_number: str) -> Optional[Dict]:
+    def lookup_truecaller_bot(self, phone_number: str) -> Optional[Dict]:
         """
-        Simulate TrueCaller-like lookup using free APIs
+        Query TrueCaller Bot via Telegram simulation for phone number information
         """
         try:
-            # Try multiple free phone lookup APIs
+            # This method simulates querying TrueCaller bot and parsing the response
+            
+            # Method 1: Try to query TrueCaller bot simulation
+            result = self._query_truecaller_bot(phone_number)
+            if result:
+                return result
+            
+            # Method 2: Fallback to other phone lookup services
+            result = self._try_alternative_lookup(phone_number)
+            return result
+            
+        except Exception as e:
+            print(f"Error in TrueCaller lookup: {e}")
+            return None
+
+    def _query_truecaller_bot(self, phone_number: str) -> Optional[Dict]:
+        """
+        Query TrueCaller Bot via Telegram API simulation
+        """
+        try:
+            # This simulates sending a message to TrueCaller bot and parsing response
+            # In a real implementation, you would use Telegram Bot API to send message to TrueCaller bot
+            
+            # Clean phone number
+            clean_number = phone_number.replace('+', '').replace(' ', '').replace('-', '')
+            
+            # Try multiple phone lookup APIs that provide TrueCaller-like data
+            apis_to_try = [
+                self._try_opencnam_api(phone_number),
+                self._try_numverify_simulation(clean_number),
+                self._try_carrier_lookup(clean_number)
+            ]
+            
+            for api_result in apis_to_try:
+                if api_result and api_result.get('valid'):
+                    return api_result
+                    
+            return None
+            
+        except Exception as e:
+            print(f"Error querying TrueCaller bot: {e}")
+            return None
+
+    def _try_opencnam_api(self, phone_number: str) -> Optional[Dict]:
+        """
+        Try OpenCNAM API for caller ID information
+        """
+        try:
+            # OpenCNAM is a free caller ID API
+            url = f"https://api.opencnam.com/v3/phone/{phone_number}"
+            headers = {'Accept': 'application/json'}
+            
+            response = self.session.get(url, headers=headers, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                return {
+                    'number': phone_number,
+                    'valid': True,
+                    'name': data.get('name', 'לא ידוע'),
+                    'carrier': 'לא ידוע',
+                    'line_type': 'לא ידוע',
+                    'country_name': 'לא ידוע',
+                    'source': 'OpenCNAM'
+                }
+            return None
+            
+        except Exception:
+            return None
+
+    def _try_numverify_simulation(self, phone_number: str) -> Optional[Dict]:
+        """
+        Simulate NumVerify API call (requires API key for real use)
+        """
+        try:
+            # This is a simulation - in real use you'd need an API key
+            # For demo purposes, we'll analyze the number structure
+            
+            result = {
+                'number': f"+{phone_number}",
+                'valid': len(phone_number) >= 10,
+                'name': 'לא ידוע',
+                'carrier': 'לא ידוע',
+                'line_type': 'נייד' if phone_number.startswith(('972', '1')) else 'לא ידוע',
+                'country_name': 'לא ידוע',
+                'source': 'NumVerify Simulation'
+            }
+            
+            # Add country detection based on prefix
+            if phone_number.startswith('972'):
+                result.update({
+                    'country_name': 'ישראל',
+                    'country_flag': '🇮🇱'
+                })
+                # Add Israeli carrier detection
+                if len(phone_number) > 3:
+                    local_number = phone_number[3:]
+                    israeli_info = self._analyze_israeli_number(local_number)
+                    result.update(israeli_info)
+                    
+            elif phone_number.startswith('1'):
+                result.update({
+                    'country_name': 'ארצות הברית/קנדה',
+                    'country_flag': '🇺🇸'
+                })
+            
+            return result if result['valid'] else None
+            
+        except Exception:
+            return None
+
+    def _try_carrier_lookup(self, phone_number: str) -> Optional[Dict]:
+        """
+        Try carrier lookup using phone number analysis
+        """
+        try:
+            # Use phonenumbers library for carrier detection
+            import phonenumbers
+            from phonenumbers import geocoder, carrier
+            
+            # Parse with different possible regions
+            for region in ['IL', 'US', 'GB', 'DE', 'FR']:
+                try:
+                    parsed = phonenumbers.parse(f"+{phone_number}", region)
+                    if phonenumbers.is_valid_number(parsed):
+                        return {
+                            'number': f"+{phone_number}",
+                            'valid': True,
+                            'name': 'לא ידוע',
+                            'carrier': carrier.name_for_number(parsed, 'he') or 'לא ידוע',
+                            'line_type': 'נייד' if phonenumbers.number_type(parsed) == phonenumbers.PhoneNumberType.MOBILE else 'קווי',
+                            'country_name': geocoder.description_for_number(parsed, 'he') or 'לא ידוע',
+                            'source': 'PhoneNumbers Library'
+                        }
+                except:
+                    continue
+                    
+            return None
+            
+        except ImportError:
+            # Fallback if phonenumbers not available
+            return self._basic_phone_analysis(f"+{phone_number}")
+        except Exception:
+            return None
+
+    def _parse_api_response(self, data: dict, phone_number: str) -> Optional[Dict]:
+        """
+        Parse API response and extract relevant information
+        """
+        try:
+            result = {
+                'number': phone_number,
+                'valid': False,
+                'name': 'לא ידוע',
+                'carrier': 'לא ידוע',
+                'line_type': 'לא ידוע',
+                'country_name': 'לא ידוע',
+                'location': 'לא ידוע',
+                'spam_score': 0,
+                'source': 'TrueCaller API'
+            }
+            
+            # Handle different API response formats
+            if 'data' in data:
+                # TrueCaller format
+                tc_data = data['data'][0] if data['data'] else {}
+                result.update({
+                    'valid': True,
+                    'name': tc_data.get('name', 'לא ידוע'),
+                    'carrier': tc_data.get('carrier', {}).get('name', 'לא ידוע'),
+                    'country_name': tc_data.get('countryDetails', {}).get('name', 'לא ידוע'),
+                    'spam_score': tc_data.get('spamInfo', {}).get('spamScore', 0)
+                })
+                
+            elif 'valid' in data:
+                # NumVerify format
+                result.update({
+                    'valid': data.get('valid', False),
+                    'country_name': data.get('country_name', 'לא ידוע'),
+                    'carrier': data.get('carrier', 'לא ידוע'),
+                    'line_type': data.get('line_type', 'לא ידוע'),
+                    'location': data.get('location', 'לא ידוע')
+                })
+                
+            elif 'phone_valid' in data:
+                # VeriPhone format  
+                result.update({
+                    'valid': data.get('phone_valid', False),
+                    'country_name': data.get('country', 'לא ידוע'),
+                    'carrier': data.get('carrier', 'לא ידוע'),
+                    'line_type': data.get('phone_type', 'לא ידוע')
+                })
+            
+            return result if result['valid'] else None
+            
+        except Exception as e:
+            print(f"Error parsing API response: {e}")
+            return None
+
+    def _try_alternative_lookup(self, phone_number: str) -> Optional[Dict]:
+        """
+        Try alternative phone lookup methods when TrueCaller API fails
+        """
+        try:
+            # Use our existing methods as fallback
             results = {}
             
-            # Method 1: Use numverify API (free tier)
-            results.update(self._try_numverify(phone_number))
+            # Method 1: Basic phone analysis
+            results.update(self._basic_phone_analysis(phone_number))
             
-            # Method 2: Use phone number parsing
+            # Method 2: Use phonenumbers library
             results.update(self._parse_phone_info(phone_number))
+            
+            # Method 3: Israeli number specific analysis
+            if phone_number.startswith('+972') or phone_number.startswith('972'):
+                clean_number = phone_number.replace('+972', '').replace('972', '')
+                results.update(self._analyze_israeli_number(clean_number))
             
             return results if results else None
             
-        except Exception as e:
-            print(f"Error in phone lookup: {e}")
+        except Exception:
             return None
 
     def _try_numverify(self, phone_number: str) -> Dict:
@@ -236,20 +445,63 @@ class PhoneNumberChecker:
         
         return result
 
-    def format_phone_result(self, phone_data: Dict, original_number: str) -> str:
-        """Format phone lookup results for display"""
-        if not phone_data:
+    def check_phone_via_truecaller_bot(self, phone_number: str) -> Dict:
+        """
+        Main method to check phone number using TrueCaller bot approach
+        """
+        try:
+            # First try to get info from TrueCaller bot
+            truecaller_info = self.lookup_truecaller_bot(phone_number)
+            
+            # If TrueCaller fails, use alternative methods
+            if not truecaller_info:
+                truecaller_info = self._try_alternative_lookup(phone_number)
+            
+            # Combine with basic analysis
+            basic_info = self._basic_phone_analysis(phone_number)
+            
+            result = {
+                'input_number': phone_number,
+                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                'truecaller_data': truecaller_info or {},
+                'basic_data': basic_info or {},
+                'success': truecaller_info is not None or basic_info is not None
+            }
+            
+            return result
+            
+        except Exception as e:
+            return {
+                'input_number': phone_number,
+                'error': str(e),
+                'success': False,
+                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            }
+
+    def format_phone_result(self, phone_result: Dict, original_number: str) -> str:
+        """Format phone lookup results for display - handles new result format"""
+        if not phone_result or not phone_result.get('success'):
             return "❌ לא הצלחתי לבדוק את המספר. אנא ודא שהמספר נכון."
         
+        # Get data from TrueCaller or basic analysis
+        phone_data = phone_result.get('truecaller_data') or phone_result.get('basic_data', {})
+        
+        if not phone_data:
+            return "❌ לא נמצא מידע על המספר."
+        
         # Build result message
-        result = f"📱 **בדיקת מספר טלפון**\n\n"
+        result = f"📱 **בדיקת מספר טלפון** (סגנון TrueCaller)\n\n"
         result += f"🔢 **מספר מקורי:** `{original_number}`\n"
-        result += f"🌍 **מספר בינלאומי:** `{phone_data.get('number', 'לא ידוע')}`\n"
+        result += f"🌍 **מספר בינלאומי:** `{phone_data.get('number', phone_result.get('input_number', 'לא ידוע'))}`\n"
         
         if phone_data.get('valid'):
             result += f"✅ **תקינות:** מספר תקין\n"
         else:
             result += f"⚠️ **תקינות:** מספר לא תקין או לא מוכר\n"
+        
+        # Show caller name if available (TrueCaller style)
+        if phone_data.get('name') and phone_data['name'] != 'לא ידוע':
+            result += f"👤 **שם:** {phone_data['name']}\n"
         
         if phone_data.get('country_name'):
             flag = phone_data.get('country_flag', '')
@@ -264,9 +516,23 @@ class PhoneNumberChecker:
         if phone_data.get('location') and phone_data['location'] != 'לא ידוע':
             result += f"📍 **מיקום:** {phone_data['location']}\n"
         
+        # Show spam score if available
+        if phone_data.get('spam_score', 0) > 0:
+            spam_level = "🔴 גבוה" if phone_data['spam_score'] > 70 else "🟡 בינוני" if phone_data['spam_score'] > 30 else "🟢 נמוך"
+            result += f"🚨 **דירוג ספאם:** {spam_level} ({phone_data['spam_score']}%)\n"
+        
+        # Show data source
+        if phone_data.get('source'):
+            result += f"🔍 **מקור:** {phone_data['source']}\n"
+        
+        # Add timestamp
+        if phone_result.get('timestamp'):
+            result += f"🕐 **זמן בדיקה:** {phone_result['timestamp']}\n"
+        
         # Add disclaimer
         result += f"\n⚠️ **הערה חשובה:**\n"
-        result += f"המידע מבוסס על מסדי נתונים ציבוריים ועשוי להיות לא מדויק או לא עדכני."
+        result += f"המידע מבוסס על מסדי נתונים ציבוריים ועשוי להיות לא מדויק או לא עדכני.\n"
+        result += f"הבוט מדמה פונקציונליות של TrueCaller באמצעות מקורות חופשיים."
         
         return result
 
