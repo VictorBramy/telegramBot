@@ -766,48 +766,86 @@ class TelegramBot:
         )
         
         try:
-            # Use the comprehensive IP analysis from locate_ip module
-            result = analyze_single_ip(target)
+            # Use the comprehensive IP analysis from locate_ip module (disable verbose to avoid Unicode issues)
+            result = analyze_single_ip(target, target, verbose=False)
             
-            if not result or not result.get('success', False):
+            if not result or not result.get('geo_results'):
                 await processing_msg.edit_text(
                     f"❌ לא הצלחתי למצוא מידע עבור: {target}\n"
                     f"נסה עם IP או דומיין אחר."
                 )
                 return
             
-            # Format the detailed results
-            location_info = result.get('data', {})
+            # Get the best geo result (usually first one)
+            geo_results = result.get('geo_results', [])
+            if not geo_results:
+                await processing_msg.edit_text(
+                    f"❌ לא נמצאו נתונים גאוגרפיים עבור: {target}"
+                )
+                return
+            
+            # Find the geo result with most information (prioritize ones with ISP data)
+            location_info = geo_results[0]  # Default to first
+            for geo in geo_results:
+                if geo.get('isp') or geo.get('org'):
+                    location_info = geo
+                    break
             
             # Build comprehensive response
             response_text = f"📍 **תוצאות איתור עבור:** `{target}`\n\n"
             
-            if location_info.get('ip'):
-                response_text += f"🌐 **IP:** `{location_info['ip']}`\n"
+            # IP address
+            ip_addr = result.get('ip', target)
+            response_text += f"🌐 **IP:** `{ip_addr}`\n"
             
+            # Country
             if location_info.get('country'):
-                flag = location_info.get('country_flag', '🏳️')
-                response_text += f"🏳️ **מדינה:** {flag} {location_info['country']}\n"
+                country = location_info['country']
+                # Try to get country flag (basic mapping)
+                flag_map = {
+                    'US': '🇺🇸', 'United States': '🇺🇸',
+                    'Canada': '🇨🇦', 'CA': '🇨🇦',
+                    'UK': '🇬🇧', 'United Kingdom': '🇬🇧',
+                    'Germany': '🇩🇪', 'DE': '🇩🇪',
+                    'France': '🇫🇷', 'FR': '🇫🇷',
+                    'Israel': '🇮🇱', 'IL': '🇮🇱'
+                }
+                flag = flag_map.get(country, '🏳️')
+                response_text += f"🏳️ **מדינה:** {flag} {country}\n"
             
-            if location_info.get('region'):
-                response_text += f"📍 **איזור:** {location_info['region']}\n"
+            # Region/State
+            region = location_info.get('regionName') or location_info.get('region')
+            if region:
+                response_text += f"📍 **איזור:** {region}\n"
             
+            # City
             if location_info.get('city'):
                 response_text += f"🏙️ **עיר:** {location_info['city']}\n"
             
-            if location_info.get('latitude') and location_info.get('longitude'):
-                lat = location_info['latitude']
-                lon = location_info['longitude']
+            # Coordinates
+            if location_info.get('lat') and location_info.get('lon'):
+                lat = location_info['lat']
+                lon = location_info['lon']
                 response_text += f"🗺️ **קואורדינטות:** {lat}, {lon}\n"
             
-            if location_info.get('timezone'):
-                response_text += f"⏰ **איזור זמן:** {location_info['timezone']}\n"
-            
+            # ISP
             if location_info.get('isp'):
                 response_text += f"🏢 **ספק שירות:** {location_info['isp']}\n"
             
+            # Organization
             if location_info.get('org'):
-                response_text += f"🏛️ **ארגון:** {location_info['org']}\n"
+                response_text += f"�️ **ארגון:** {location_info['org']}\n"
+            
+            # Source
+            if location_info.get('source'):
+                response_text += f"🔍 **מקור:** {location_info['source']}\n"
+            
+            # Confidence score if available
+            confidence = result.get('confidence', {})
+            if confidence.get('score'):
+                score = confidence['score']
+                grade = confidence.get('grade', 'N/A')
+                response_text += f"\n📊 **אמינות:** {score}/100 (דרג {grade})\n"
             
             # Add interactive buttons
             keyboard = [
