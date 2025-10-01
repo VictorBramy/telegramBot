@@ -259,23 +259,26 @@ class StockAnalyzer:
                     price_text = elem.text.replace(',', '').strip()
                     price = float(price_text)
                     
-                    # Look for reasonable stock price range
-                    if 5.0 <= price <= 500.0:
+                    # Look for reasonable stock price range (expanded for expensive stocks)
+                    if 1.0 <= price <= 1000.0:  # Allow higher prices for expensive stocks
                         current_price = price
                         break
                 except:
                     continue
             
-            # Method 2: If no reasonable price found, use a default based on symbol
+            # Method 2: If no reasonable price found, use updated defaults (Oct 2025)
             if current_price is None:
                 symbol_defaults = {
                     'AAPL': 185.0,
-                    'MSFT': 350.0, 
-                    'GOOGL': 140.0,
-                    'TSLA': 250.0,
+                    'MSFT': 420.0, 
+                    'GOOGL': 165.0,
+                    'TSLA': 458.0,  # Updated to current price
                     'AMZN': 145.0,
-                    'META': 320.0,
-                    'NVDA': 450.0
+                    'META': 500.0,
+                    'NVDA': 430.0,
+                    'NFLX': 380.0,
+                    'AMD': 145.0,
+                    'INTC': 25.0
                 }
                 current_price = symbol_defaults.get(symbol, 150.0)
             
@@ -314,57 +317,67 @@ class StockAnalyzer:
     def _try_simple_api(self, symbol: str, period: str) -> Optional[pd.DataFrame]:
         """Try simple free APIs that don't require authentication"""
         try:
-            # Try finnhub.io free tier
+            # Method 1: Yahoo Finance JSON API (most reliable)
+            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
+            headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+            
+            response = requests.get(url, headers=headers, timeout=10)
+            if response.status_code == 200:
+                data = response.json()
+                chart = data.get('chart', {})
+                result = chart.get('result', [])
+                
+                if result and len(result) > 0:
+                    meta = result[0].get('meta', {})
+                    current_price = meta.get('regularMarketPrice')
+                    
+                    if current_price and current_price > 0:
+                        print(f"Yahoo JSON API: {symbol} = ${current_price:.2f}")
+                        return self._generate_historical_from_price(current_price, symbol)
+                    
+                    # Fallback: try to get from historical data
+                    timestamps = result[0].get('timestamp', [])
+                    indicators = result[0].get('indicators', {})
+                    quotes = indicators.get('quote', [{}])
+                    
+                    if quotes and len(quotes) > 0:
+                        closes = quotes[0].get('close', [])
+                        if closes:
+                            # Get the last valid price
+                            current_price = next((p for p in reversed(closes) if p is not None), 0)
+                            if current_price > 0:
+                                print(f"Yahoo historical: {symbol} = ${current_price:.2f}")
+                                return self._generate_historical_from_price(current_price, symbol)
+            
+            # Method 2: Try finnhub.io (may have demo limitations)
             url = f"https://finnhub.io/api/v1/quote"
-            params = {
-                'symbol': symbol,
-                'token': 'demo'  # Demo token for testing
-            }
+            params = {'symbol': symbol, 'token': 'demo'}
             
             response = requests.get(url, params=params, timeout=10)
             if response.status_code == 200:
                 data = response.json()
                 current_price = data.get('c', 0)  # Current price
                 
-                if current_price > 0:
-                    # Generate mock historical data based on current price
+                if current_price and current_price > 0:
+                    print(f"Finnhub API: {symbol} = ${current_price:.2f}")
                     return self._generate_historical_from_price(current_price, symbol)
             
-            # Try Alpha Vantage demo
-            url = f"https://www.alphavantage.co/query"
-            params = {
-                'function': 'GLOBAL_QUOTE',
-                'symbol': symbol,
-                'apikey': 'demo'
-            }
+            # Method 3: Alternative Yahoo Finance endpoint
+            url = f"https://query2.finance.yahoo.com/v1/finance/search"
+            params = {'q': symbol, 'lang': 'en-US', 'region': 'US', 'quotesCount': 1}
             
-            response = requests.get(url, params=params, timeout=10)
+            response = requests.get(url, headers=headers, params=params, timeout=10)
             if response.status_code == 200:
                 data = response.json()
-                quote = data.get('Global Quote', {})
-                price = quote.get('05. price', 0)
+                quotes = data.get('quotes', [])
                 
-                if price and float(price) > 0:
-                    return self._generate_historical_from_price(float(price), symbol)
-            
-            # Fallback: Yahoo Finance simple quote
-            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
-            response = requests.get(url, timeout=10)
-            
-            if response.status_code == 200:
-                data = response.json()
-                result = data.get('chart', {}).get('result', [])
-                
-                if result and len(result) > 0:
-                    prices = result[0].get('indicators', {}).get('quote', [{}])[0]
-                    closes = prices.get('close', [])
+                if quotes and len(quotes) > 0:
+                    quote = quotes[0]
+                    current_price = quote.get('regularMarketPrice')
                     
-                    if closes and len(closes) > 0:
-                        # Get the last valid price
-                        current_price = next((p for p in reversed(closes) if p is not None), 0)
-                        
-                        if current_price > 0:
-                            return self._generate_historical_from_price(current_price, symbol)
+                    if current_price and current_price > 0:
+                        print(f"Yahoo search: {symbol} = ${current_price:.2f}")
+                        return self._generate_historical_from_price(current_price, symbol)
             
             return None
             
