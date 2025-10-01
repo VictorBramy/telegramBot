@@ -72,11 +72,37 @@ class StockAnalyzer:
         self.cache_timeout = 300  # 5 minutes cache
         self.data_sources = ['yahoo', 'yahoo_fin', 'twelve_data', 'fmp', 'google', 'alpha_vantage', 'mock']
         
+        # Index symbol mapping for correct prices
+        self.index_mapping = {
+            'DJI': '^DJI',      # Dow Jones Industrial Average
+            'SPX': '^GSPC',     # S&P 500  
+            'SP500': '^GSPC',   # S&P 500 alternative
+            'NDX': '^NDX',      # NASDAQ 100
+            'NASDAQ': '^IXIC',  # NASDAQ Composite
+            'VIX': '^VIX',      # Volatility Index
+            'RUT': '^RUT',      # Russell 2000
+            'FTSE': '^FTSE',    # FTSE 100
+            'N225': '^N225',    # Nikkei 225
+            'NIKKEI': '^N225',  # Nikkei alternative
+            'HSI': '^HSI',      # Hang Seng
+            'DAX': '^GDAXI',    # German DAX
+            'CAC': '^FCHI',     # French CAC 40
+            'GOLD': 'GLD',      # Gold ETF
+            'OIL': 'CL=F',      # Oil futures
+            'BTC': 'BTC-USD',   # Bitcoin
+        }
+        
     def get_stock_data(self, symbol: str, period: str = "6mo") -> Optional[pd.DataFrame]:
         """Get stock data from multiple sources with fallback"""
         try:
             # Clean symbol
             symbol = symbol.upper().strip()
+            
+            # Map index symbols to correct format
+            original_symbol = symbol
+            if symbol in self.index_mapping:
+                symbol = self.index_mapping[symbol]
+                print(f"Index mapping: {original_symbol} -> {symbol}")
             
             # Check cache
             cache_key = f"{symbol}_{period}"
