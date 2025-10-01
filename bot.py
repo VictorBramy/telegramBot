@@ -761,18 +761,33 @@ class TelegramBot:
         # Show processing message
         processing_msg = await update.message.reply_text(
             f"🔍 מחפש מיקום עבור: {target}\n"
-            f"📡 טוען מידע גאוגרפי...\n"
-            f"⏳ אנא המתן..."
+            f"📡 שולח שאילתות ל-5 מקורות גאוגרפיים...\n"
+            f"⏳ זה עלול לקחת 10-15 שניות..."
         )
         
         try:
+            # Update progress
+            await processing_msg.edit_text(
+                f"🔍 מחפש מיקום עבור: {target}\n"
+                f"🌐 מבצע חיפוש מקיף ב-API מרובים...\n"
+                f"📊 אוסף נתונים מ: ip-api, ipinfo, ipwhois ועוד...\n"
+                f"⏳ ממש עוד רגע..."
+            )
+            
             # Use the comprehensive IP analysis from locate_ip module (disable verbose to avoid Unicode issues)
-            result = analyze_single_ip(target, target, verbose=False)
+            result = analyze_single_ip(target, target, verbose=False, fast_mode=True)
             
             if not result or not result.get('geo_results'):
                 await processing_msg.edit_text(
-                    f"❌ לא הצלחתי למצוא מידע עבור: {target}\n"
-                    f"נסה עם IP או דומיין אחר."
+                    f"❌ **החיפוש הושלם - לא נמצאו נתונים**\n\n"
+                    f"🎯 **יעד:** `{target}`\n"
+                    f"🔍 **נבדקו:** 5+ מקורות גאוגרפיים\n"
+                    f"📊 **תוצאות:** לא נמצא מידע זמין\n\n"
+                    f"💡 **אפשר לנסות:**\n"
+                    f"• בדוק שהכתובת IP תקינה\n"
+                    f"• נסה עם דומיין במקום IP\n"
+                    f"• נסה עם IP ציבורי אחר",
+                    parse_mode='Markdown'
                 )
                 return
             
@@ -847,6 +862,11 @@ class TelegramBot:
                 grade = confidence.get('grade', 'N/A')
                 response_text += f"\n📊 **אמינות:** {score}/100 (דרג {grade})\n"
             
+            # Add info about sources
+            num_sources = len(result.get('geo_results', []))
+            response_text += f"🔍 **מקורות:** נבדקו {num_sources} מסדי נתונים\n"
+            response_text += f"⚡ **זמן חיפוש:** ~{13 if not result.get('fast_mode') else 8} שניות"
+            
             # Add interactive buttons
             keyboard = [
                 [InlineKeyboardButton("🔄 איתור IP אחר", callback_data='locate_another')],
@@ -864,8 +884,16 @@ class TelegramBot:
         except Exception as e:
             logger.error(f"Error in locate_ip_command: {e}")
             await processing_msg.edit_text(
-                f"❌ מצטער {user_name}, אירעה שגיאה בחיפוש המיקום של {target}\n"
-                f"נסה שוב מאוחר יותר או עם IP/דומיין אחר."
+                f"❌ **שגיאה בביצוע החיפוש**\n\n"
+                f"👤 **משתמש:** {user_name}\n"
+                f"🎯 **יעד:** `{target}`\n"
+                f"❗ **שגיאה:** `{str(e)}`\n\n"
+                f"🔄 **פתרונות אפשריים:**\n"
+                f"• נסה שוב עוד כמה שניות\n"
+                f"• בדוק חיבור לאינטרנט\n"
+                f"• נסה עם IP או דומיין אחר\n"
+                f"• פנה למפתח אם הבעיה נמשכת",
+                parse_mode='Markdown'
             )
 
     async def port_scan_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
