@@ -691,32 +691,32 @@ class TelegramBot:
         
         # Download handlers for port scan results
         elif query.data == 'download_port_csv':
-            await self.send_scan_file(query, 'port_scan', 'csv')
+            await self.send_scan_file(query, context, 'port_scan', 'csv')
         elif query.data == 'download_port_json':
-            await self.send_scan_file(query, 'port_scan', 'json')
+            await self.send_scan_file(query, context, 'port_scan', 'json')
         elif query.data == 'download_port_txt':
-            await self.send_scan_file(query, 'port_scan', 'txt')
+            await self.send_scan_file(query, context, 'port_scan', 'txt')
         
         # Download handlers for range scan results
         elif query.data == 'download_range_csv':
-            await self.send_scan_file(query, 'range_scan', 'csv')
+            await self.send_scan_file(query, context, 'range_scan', 'csv')
         elif query.data == 'download_range_json':
-            await self.send_scan_file(query, 'range_scan', 'json')
+            await self.send_scan_file(query, context, 'range_scan', 'json')
         elif query.data == 'download_range_txt':
-            await self.send_scan_file(query, 'range_scan', 'txt')
+            await self.send_scan_file(query, context, 'range_scan', 'txt')
         
         # Download handlers for ping results
         elif query.data == 'download_ping_csv':
-            await self.send_scan_file(query, 'ping', 'csv')
+            await self.send_scan_file(query, context, 'ping', 'csv')
         elif query.data == 'download_ping_json':
-            await self.send_scan_file(query, 'ping', 'json')
+            await self.send_scan_file(query, context, 'ping', 'json')
         elif query.data == 'download_ping_txt':
-            await self.send_scan_file(query, 'ping', 'txt')
+            await self.send_scan_file(query, context, 'ping', 'txt')
         
         else:
             await query.edit_message_text("🤖 אפשרות לא מזוהה")
 
-    async def send_scan_file(self, query, scan_type: str, file_format: str):
+    async def send_scan_file(self, query, context, scan_type: str, file_format: str):
         """Send scan results as a downloadable file"""
         import io
         from datetime import datetime
@@ -773,7 +773,7 @@ class TelegramBot:
             user_name = query.from_user.first_name
             
             # Send file with proper caption
-            await query.bot.send_document(
+            await context.bot.send_document(
                 chat_id=chat_id,
                 document=file_buffer,
                 filename=filename,
