@@ -395,7 +395,12 @@ class StockAnalyzer:
         
         # Generate price walk backwards from current price
         returns = np.random.normal(0.001, 0.02, len(dates))  # 0.1% daily return, 2% volatility
-        returns[-1] = 0  # Ensure last day ends at current price
+        
+        # Make sure last day has a realistic change (not 0)
+        # Use consistent but non-zero change based on symbol
+        symbol_hash = abs(hash(symbol + str(int(current_price))))
+        last_day_change = (symbol_hash % 100 - 50) / 10000  # Between -0.5% and +0.5%
+        returns[-1] = last_day_change
         
         prices = [current_price]
         # Work backwards to create historical prices
@@ -773,17 +778,19 @@ class StockAnalyzer:
             # Drop NaN values
             df = df.dropna()
             
-            if len(df) < 20:
-                return {'error': 'Insufficient clean data'}
+            if len(df) < 10:
+                return {'error': f'Only {len(df)} clean data points for simple prediction, need at least 10'}
             
             # Simple trend analysis
-            recent_prices = df['Close'].tail(10).values
-            trend = np.polyfit(range(10), recent_prices, 1)[0]  # Linear trend
+            recent_window = min(10, len(df))
+            recent_prices = df['Close'].tail(recent_window).values
+            trend = np.polyfit(range(recent_window), recent_prices, 1)[0]  # Linear trend
             
             current_price = df['Close'].iloc[-1]
             
             # Simple prediction based on trend and volatility
-            volatility = df['Close'].tail(20).std()
+            volatility_window = min(len(df), 20)
+            volatility = df['Close'].tail(volatility_window).std()
             
             predictions = []
             for day in range(1, days + 1):
@@ -817,32 +824,32 @@ class StockAnalyzer:
         if not ML_AVAILABLE:
             return self.simple_prediction(data, days)
         
-        if data is None or len(data) < 50:
+        if data is None or len(data) < 30:  # Reduced from 50 to 30
             return {'error': 'Insufficient data for ML prediction'}
         
         try:
             # Prepare features for ML
             df = data.copy()
             
-            # Technical indicators as features
+            # Technical indicators as features (shorter periods for limited data)
+            df['SMA_3'] = df['Close'].rolling(3).mean()
             df['SMA_5'] = df['Close'].rolling(5).mean()
             df['SMA_10'] = df['Close'].rolling(10).mean()
-            df['SMA_20'] = df['Close'].rolling(20).mean()
-            df['EMA_12'] = df['Close'].ewm(span=12).mean()
+            df['EMA_5'] = df['Close'].ewm(span=5).mean()
             
             # Price momentum features
             df['Price_Change_1d'] = df['Close'].pct_change(1)
-            df['Price_Change_5d'] = df['Close'].pct_change(5)
+            df['Price_Change_3d'] = df['Close'].pct_change(3)
             df['Volume_Change'] = df['Volume'].pct_change()
             
-            # Volatility
-            df['Volatility'] = df['Close'].rolling(10).std()
+            # Volatility (shorter window)
+            df['Volatility'] = df['Close'].rolling(5).std()
             
             # High-Low spread
             df['HL_Spread'] = (df['High'] - df['Low']) / df['Close']
             
-            # Volume ratio
-            df['Volume_Ratio'] = df['Volume'] / df['Volume'].rolling(20).mean()
+            # Volume ratio (shorter window)
+            df['Volume_Ratio'] = df['Volume'] / df['Volume'].rolling(10).mean()
             
             # Target: next day's price change
             df['Target'] = df['Close'].shift(-1) - df['Close']
@@ -850,12 +857,12 @@ class StockAnalyzer:
             # Drop NaN values
             df = df.dropna()
             
-            if len(df) < 30:
-                return {'error': 'Insufficient clean data for ML'}
+            if len(df) < 10:  # Minimal threshold - just need some data
+                return {'error': f'Only {len(df)} clean data points, need at least 10'}
             
-            # Prepare features and target
-            feature_columns = ['SMA_5', 'SMA_10', 'SMA_20', 'EMA_12', 'Price_Change_1d', 
-                             'Price_Change_5d', 'Volume_Change', 'Volatility', 'HL_Spread', 'Volume_Ratio']
+            # Prepare features and target (updated column names)
+            feature_columns = ['SMA_3', 'SMA_5', 'SMA_10', 'EMA_5', 'Price_Change_1d', 
+                             'Price_Change_3d', 'Volume_Change', 'Volatility', 'HL_Spread', 'Volume_Ratio']
             
             X = df[feature_columns].values
             y = df['Target'].values
