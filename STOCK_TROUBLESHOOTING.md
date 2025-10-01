@@ -144,11 +144,35 @@ Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
 
 | שירות | סטטוס | הערות |
 |-------|--------|-------|
-| Yahoo Finance API | 🟡 מגבל | Rate limiting |
+| Yahoo Finance (yfinance) | 🟡 מגבל | Rate limiting, גיבוי 1 |
+| Yahoo Finance (yahoo-fin) | 🟡 מגבל | גיבוי 2 |
+| Web Scraping Yahoo | 🟢 פעיל | **גיבוי יציב** |
+| Simple Free APIs | 🟡 מגבל | Finnhub demo, Alpha Vantage |
 | Mock Data (TEST) | 🟢 פעיל | תמיד זמין |
 | Technical Analysis | 🟢 פעיל | עובד עם כל נתון |
 | ML Predictions | 🟢 פעיל | זמין עם 50+ ימים |
 | File Export | 🟢 פעיל | CSV/JSON |
+
+## 🆕 עדכון חדש - מערכת Multi-API!
+
+**✅ הבעיה נפתרה!** הוספנו מערכת גיבוי של 7 מקורות נתונים:
+
+1. **Yahoo Finance (yfinance)** - מקור ראשי
+2. **Yahoo Finance (yahoo-fin)** - חלופה 1  
+3. **Simple Free APIs** - Finnhub + Alpha Vantage
+4. **Web Scraping** - חילוץ ישירות מהאתר ✨ **עובד הכי טוב!**
+5. **Twelve Data API** - API מקצועי
+6. **FMP Free API** - Financial Modeling Prep  
+7. **Mock Data** - נתונים מדומים לבדיקה
+
+### 💡 הפתרון שעובד:
+```
+/stock AAPL    # עובד עם web scraping!
+/stock MSFT    # מחירים אמיתיים
+/stock TSLA    # ניתוח מלא
+```
+
+**המערכת מנסה כל מקור עד שמוצאת נתונים וחוזרת עם ניתוח מלא!**
 
 ---
 
