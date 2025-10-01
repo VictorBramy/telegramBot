@@ -510,6 +510,76 @@ class TelegramBot:
             )
         elif query.data == 'contact':
             await query.edit_message_text("📞 ליצירת קשר שלח הודעה פרטית למפתח @VB_International")
+        
+        # Demo handlers for menu navigation
+        elif query.data == 'ping_demo':
+            await query.edit_message_text(
+                "🏓 **בדיקת Ping מתקדמת**\n\n"
+                "בדוק זמינות ומהירות תגובה!\n"
+                "`/ping <IP או דומיין>`\n\n"
+                "🔹 **דוגמאות:**\n"
+                "• **שרתי Google:** `/ping 8.8.8.8`\n"
+                "• **אתרים:** `/ping google.com`\n"
+                "• **CDN:** `/ping cloudflare.com`\n\n"
+                "📊 **מה תקבל:**\n"
+                "• זמן תגובה במילישניות\n"
+                "• סטטוס זמינות\n"
+                "• TTL (Time To Live)\n"
+                "• אחוז אובדן חבילות",
+                parse_mode='Markdown'
+            )
+        
+        elif query.data == 'scan_demo':
+            await query.edit_message_text(
+                "🔍 **סריקת פורטים מקצועית**\n\n"
+                "גלה פורטים פתוחים בשרתים!\n"
+                "`/scan <IP או דומיין> [רמה]`\n\n"
+                "🔹 **רמות סריקה:**\n"
+                "• **מהירה:** `/scan 192.168.1.1 quick`\n"
+                "• **נפוצה:** `/scan google.com common`\n"
+                "• **מלאה:** `/scan 8.8.8.8 top100`\n\n"
+                "🎯 **תוצאות:**\n"
+                "• פורטים פתוחים\n"
+                "• שירותים מזוהים\n"
+                "• זמני תגובה\n"
+                "• אפשרות הורדת תוצאות",
+                parse_mode='Markdown'
+            )
+        
+        elif query.data == 'locate_demo':
+            await query.edit_message_text(
+                "📍 **איתור מיקום IP מתקדם**\n\n"
+                "מצא מיקום גאוגרפי של כל IP!\n"
+                "`/locate <IP או דומיין>`\n\n"
+                "🔹 **דוגמאות:**\n"
+                "• **שרתי גוגל:** `/locate 8.8.8.8`\n"
+                "• **אתרים:** `/locate facebook.com`\n"
+                "• **שרתים:** `/locate 1.1.1.1`\n\n"
+                "🌍 **מידע מפורט:**\n"
+                "• מדינה ועיר\n"
+                "• ספק שירות (ISP)\n"
+                "• קואורדינטות GPS\n"
+                "• ציון אמינות מ-5 מקורות",
+                parse_mode='Markdown'
+            )
+        
+        elif query.data == 'range_scan_demo':
+            await query.edit_message_text(
+                "🎯 **סריקת טווח IP מתקדמת**\n\n"
+                "סרוק אלפי IP במהירות הבזק!\n"
+                "`/rangescan <טווח> <פורט>`\n\n"
+                "🔹 **פורמטים נתמכים:**\n"
+                "• **CIDR:** `/rangescan 192.168.1.0/24 22`\n"
+                "• **טווח:** `/rangescan 213.0.0.0-213.0.0.255 5900`\n"
+                "• **IP יחיד:** `/rangescan 8.8.8.8 80`\n\n"
+                "⚡ **ביצועים:**\n"
+                "• עד 1000+ IP לשנייה\n"
+                "• מחפש שרתי VNC, SSH, HTTP\n"
+                "• עדכוני התקדמות בזמן אמת\n"
+                "• הורדת תוצאות מלאות",
+                parse_mode='Markdown'
+            )
+        
         elif query.data == 'confirm_large_scan':
             # Handle large range scan confirmation
             if hasattr(self, 'pending_scan'):
@@ -870,7 +940,7 @@ class TelegramBot:
             # Add interactive buttons
             keyboard = [
                 [InlineKeyboardButton("🔄 איתור IP אחר", callback_data='locate_another')],
-                [InlineKeyboardButton("📋 תפריט ראשי", callback_data='info')]
+                [InlineKeyboardButton("📋 תפריט ראשי", callback_data='main_menu')]
             ]
             reply_markup = InlineKeyboardMarkup(keyboard)
             
