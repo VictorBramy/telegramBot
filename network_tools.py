@@ -25,8 +25,9 @@ class ScanResult:
 class IPRangeScanner:
     """High-performance IP range scanner for specific ports"""
     
-    def __init__(self, max_workers: int = 1000, timeout: float = 2.0):
-        self.max_workers = max_workers
+    def __init__(self, max_workers: int = 50, timeout: float = 1.0):
+        # Limit max_workers to prevent thread exhaustion
+        self.max_workers = min(max_workers, 50)  # Max 50 threads to prevent "can't start new thread" error
         self.timeout = timeout
         self.results = []
         
@@ -151,10 +152,9 @@ class IPRangeScanner:
             # Progress tracking
             last_progress = 0
             
-            # Use ThreadPoolExecutor for maximum concurrency
-            with concurrent.futures.ThreadPoolExecutor(
-                max_workers=min(self.max_workers, total_ips)
-            ) as executor:
+            # Use ThreadPoolExecutor with limited concurrency to prevent thread exhaustion
+            workers = min(self.max_workers, total_ips, 50)  # Never exceed 50 threads
+            with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
                 
                 # Submit all scan tasks
                 future_to_ip = {

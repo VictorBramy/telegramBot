@@ -578,6 +578,23 @@ class TelegramBot:
                     # Clean up pending scan
                     delattr(self, 'pending_scan')
                     
+                except RuntimeError as e:
+                    if "can't start new thread" in str(e):
+                        logger.error(f"Thread exhaustion error: {e}")
+                        await query.edit_message_text(
+                            f"⚠️ **משאבי מערכת מוגבלים**\n\n"
+                            f"🔍 **טווח:** `{ip_range}`\n"
+                            f"🎯 **פורט:** `{port}`\n\n"
+                            f"❗ **הבעיה:** יותר מדי threads פעילים\n\n"
+                            f"💡 **פתרונות:**\n"
+                            f"• המתן 30 שניות ונסה שוב\n"
+                            f"• נסה טווח קטן יותר (עד 10,000 IPs)\n"
+                            f"• פנה למפתח לשדרוג שרת\n\n"
+                            f"🔄 **נסה שוב בקרוב...**",
+                            parse_mode='Markdown'
+                        )
+                    else:
+                        raise e
                 except Exception as e:
                     logger.error(f"Error in confirmed range scan: {e}")
                     await query.edit_message_text(
