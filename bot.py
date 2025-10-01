@@ -17,7 +17,9 @@ from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQu
 from locate_ip import analyze_single_ip, geoip_ipapi, geoip_ipinfo
 
 # Import network tools
-from network_tools import NetworkTools, format_port_scan_result, format_ping_result, IPRangeScanner, format_range_scan_result
+from network_tools import (NetworkTools, format_port_scan_result, format_ping_result, 
+                          IPRangeScanner, format_range_scan_result,
+                          export_scan_results_csv, export_scan_results_json, export_scan_results_txt)
 
 # Load environment variables
 load_dotenv()
@@ -561,8 +563,14 @@ class TelegramBot:
                     # Format results
                     result_text = format_range_scan_result(result)
                     
+                    # Store scan result for download
+                    self.last_range_scan_result = result
+                    
                     # Create inline keyboard for additional options
                     keyboard = [
+                        [InlineKeyboardButton("💾 הורד תוצאות CSV", callback_data='download_range_csv'),
+                         InlineKeyboardButton("📄 הורד כ-JSON", callback_data='download_range_json')],
+                        [InlineKeyboardButton("📝 הורד כ-TXT", callback_data='download_range_txt')],
                         [InlineKeyboardButton("🔄 סרוק טווח אחר", callback_data='range_scan_demo')],
                         [InlineKeyboardButton("🔍 סריקת פורטים רגילה", callback_data='scan_menu')],
                         [InlineKeyboardButton("📍 איתור IP", callback_data='locate_demo')]
@@ -610,8 +618,118 @@ class TelegramBot:
                     )
             else:
                 await query.edit_message_text("❌ נתוני הסריקה לא נמצאו. נסה שוב.")
+        
+        # Download handlers for port scan results
+        elif query.data == 'download_port_csv':
+            await self.send_scan_file(query, 'port_scan', 'csv')
+        elif query.data == 'download_port_json':
+            await self.send_scan_file(query, 'port_scan', 'json')
+        elif query.data == 'download_port_txt':
+            await self.send_scan_file(query, 'port_scan', 'txt')
+        
+        # Download handlers for range scan results
+        elif query.data == 'download_range_csv':
+            await self.send_scan_file(query, 'range_scan', 'csv')
+        elif query.data == 'download_range_json':
+            await self.send_scan_file(query, 'range_scan', 'json')
+        elif query.data == 'download_range_txt':
+            await self.send_scan_file(query, 'range_scan', 'txt')
+        
+        # Download handlers for ping results
+        elif query.data == 'download_ping_csv':
+            await self.send_scan_file(query, 'ping', 'csv')
+        elif query.data == 'download_ping_json':
+            await self.send_scan_file(query, 'ping', 'json')
+        elif query.data == 'download_ping_txt':
+            await self.send_scan_file(query, 'ping', 'txt')
+        
         else:
             await query.edit_message_text("🤖 אפשרות לא מזוהה")
+
+    async def send_scan_file(self, query, scan_type: str, file_format: str):
+        """Send scan results as a downloadable file"""
+        import io
+        from datetime import datetime
+        
+        try:
+            # Get the stored result based on scan type
+            if scan_type == 'port_scan':
+                result = getattr(self, 'last_port_scan_result', None)
+                scan_name = "Port_Scan"
+            elif scan_type == 'range_scan':
+                result = getattr(self, 'last_range_scan_result', None)
+                scan_name = "Range_Scan"
+            elif scan_type == 'ping':
+                result = getattr(self, 'last_ping_result', None)
+                scan_name = "Ping_Test"
+            else:
+                await query.edit_message_text("❌ סוג סריקה לא תקין")
+                return
+            
+            if not result:
+                await query.edit_message_text("❌ לא נמצאו תוצאות סריקה להורדה. בצע סריקה תחילה.")
+                return
+            
+            # Generate file content based on format
+            if file_format == 'csv':
+                content = export_scan_results_csv(result, scan_type)
+                mime_type = 'text/csv'
+                file_ext = 'csv'
+            elif file_format == 'json':
+                content = export_scan_results_json(result, scan_type)
+                mime_type = 'application/json'
+                file_ext = 'json'
+            elif file_format == 'txt':
+                content = export_scan_results_txt(result, scan_type)
+                mime_type = 'text/plain'
+                file_ext = 'txt'
+            else:
+                await query.edit_message_text("❌ פורמט קובץ לא תקין")
+                return
+            
+            # Create filename with timestamp
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            filename = f"TelegramBot_{scan_name}_{timestamp}.{file_ext}"
+            
+            # Create BytesIO object for file upload
+            file_buffer = io.BytesIO(content.encode('utf-8'))
+            file_buffer.name = filename
+            
+            # Send the file
+            await query.edit_message_text("📤 מכין קובץ להורדה...")
+            
+            # Get chat and user info
+            chat_id = query.message.chat_id
+            user_name = query.from_user.first_name
+            
+            # Send file with proper caption
+            await query.bot.send_document(
+                chat_id=chat_id,
+                document=file_buffer,
+                filename=filename,
+                caption=f"📊 **תוצאות סריקה - {scan_name.replace('_', ' ')}**\n\n"
+                       f"📅 **תאריך:** {datetime.now().strftime('%d/%m/%Y %H:%M')}\n"
+                       f"📁 **פורמט:** {file_format.upper()}\n"
+                       f"👤 **הוכן עבור:** {user_name}\n\n"
+                       f"💾 **הקובץ מוכן להורדה!**",
+                parse_mode='Markdown'
+            )
+            
+            # Update the message to show completion
+            await query.edit_message_text(
+                f"✅ **קובץ נשלח בהצלחה!**\n\n"
+                f"📁 **שם קובץ:** `{filename}`\n"
+                f"📊 **פורמט:** {file_format.upper()}\n\n"
+                f"💡 **טיפ:** הקובץ זמין להורדה מהשיחה"
+            )
+            
+        except Exception as e:
+            logger.error(f"Error sending scan file: {e}")
+            await query.edit_message_text(
+                f"❌ **שגיאה ביצירת הקובץ**\n\n"
+                f"❗ **שגיאה:** `{str(e)}`\n\n"
+                f"🔄 נסה שוב מאוחר יותר"
+            )
 
     async def locate_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /locate command for IP geolocation"""
@@ -775,8 +893,14 @@ class TelegramBot:
             # Format results
             result_text = format_port_scan_result(result)
             
+            # Store scan result for download
+            self.last_port_scan_result = result
+            
             # Create inline keyboard for additional options
             keyboard = [
+                [InlineKeyboardButton("💾 הורד תוצאות CSV", callback_data='download_port_csv'),
+                 InlineKeyboardButton("📄 הורד כ-JSON", callback_data='download_port_json')],
+                [InlineKeyboardButton("📝 הורד כ-TXT", callback_data='download_port_txt')],
                 [InlineKeyboardButton("🔄 סרוק מחדש", callback_data='scan_another')],
                 [InlineKeyboardButton("🏓 Ping Test", callback_data='ping_demo')],
                 [InlineKeyboardButton("📍 איתור IP", callback_data='locate_demo')]
@@ -857,8 +981,14 @@ class TelegramBot:
             # Format results
             result_text = format_ping_result(result)
             
+            # Store ping result for download
+            self.last_ping_result = result
+            
             # Create inline keyboard for additional options
             keyboard = [
+                [InlineKeyboardButton("💾 הורד תוצאות CSV", callback_data='download_ping_csv'),
+                 InlineKeyboardButton("📄 הורד כ-JSON", callback_data='download_ping_json')],
+                [InlineKeyboardButton("📝 הורד כ-TXT", callback_data='download_ping_txt')],
                 [InlineKeyboardButton("🔄 Ping מחדש", callback_data='ping_another')],
                 [InlineKeyboardButton("🔍 סריקת פורטים", callback_data='scan_demo')],
                 [InlineKeyboardButton("📍 איתור IP", callback_data='locate_demo')]
@@ -1025,8 +1155,14 @@ class TelegramBot:
             # Format results
             result_text = format_range_scan_result(result)
             
+            # Store scan result for download
+            self.last_range_scan_result = result
+            
             # Create inline keyboard for additional options
             keyboard = [
+                [InlineKeyboardButton("💾 הורד תוצאות CSV", callback_data='download_range_csv'),
+                 InlineKeyboardButton("📄 הורד כ-JSON", callback_data='download_range_json')],
+                [InlineKeyboardButton("📝 הורד כ-TXT", callback_data='download_range_txt')],
                 [InlineKeyboardButton("🔄 סרוק טווח אחר", callback_data='range_scan_demo')],
                 [InlineKeyboardButton("🔍 סריקת פורטים רגילה", callback_data='scan_demo')],
                 [InlineKeyboardButton("📍 איתור IP", callback_data='locate_demo')]
