@@ -508,6 +508,91 @@ class TelegramBot:
             )
         elif query.data == 'contact':
             await query.edit_message_text("📞 ליצירת קשר שלח הודעה פרטית למפתח @VB_International")
+        elif query.data == 'confirm_large_scan':
+            # Handle large range scan confirmation
+            if hasattr(self, 'pending_scan'):
+                ip_range = self.pending_scan['range']
+                port = self.pending_scan['port']
+                
+                user_name = update.effective_user.first_name
+                user_id = update.effective_user.id
+                username = update.effective_user.username or "ללא שם משתמש"
+                
+                logger.info(f"🎯 /rangescan CONFIRMED '{ip_range}' פורט {port} - משתמש: {user_name} (@{username}) | ID: {user_id}")
+                user_logger.info(f"🎯 /rangescan CONFIRMED '{ip_range}' פורט {port} - משתמש: {user_name} (@{username}) | ID: {user_id}")
+                
+                # Show processing message
+                await query.edit_message_text(
+                    f"🚀 **מתחיל סריקה מאושרת**\n\n"
+                    f"📍 **טווח:** `{ip_range}`\n"
+                    f"🔍 **פורט:** `{port}`\n\n"
+                    f"🧵 **מכין {self.range_scanner.max_workers} threads...**\n"
+                    f"⏳ **התחלת סריקה...**",
+                    parse_mode='Markdown'
+                )
+                
+                # Progress callback function
+                async def progress_callback(scanned, total, found):
+                    progress_percent = (scanned / total) * 100
+                    bar_length = 20
+                    filled = int(bar_length * scanned / total)
+                    bar = "█" * filled + "░" * (bar_length - filled)
+                    
+                    try:
+                        await query.edit_message_text(
+                            f"🎯 **סורק טווח IP - {progress_percent:.1f}%**\n\n"
+                            f"📍 **טווח:** `{ip_range}`\n"
+                            f"🔍 **פורט:** `{port}`\n\n"
+                            f"📊 **התקדמות:** `{scanned:,}/{total:,}`\n"
+                            f"🟢 **נמצאו:** `{found}` פורטים פתוחים\n\n"
+                            f"**[{bar}] {progress_percent:.1f}%**\n\n"
+                            f"⚡ ממשיך בסריקה...",
+                            parse_mode='Markdown'
+                        )
+                    except:
+                        pass  # Ignore edit errors during progress updates
+                
+                try:
+                    # Perform the range scan
+                    result = await self.range_scanner.scan_range_async(
+                        ip_range, port, progress_callback
+                    )
+                    
+                    # Format results
+                    result_text = format_range_scan_result(result)
+                    
+                    # Create inline keyboard for additional options
+                    keyboard = [
+                        [InlineKeyboardButton("🔄 סרוק טווח אחר", callback_data='range_scan_demo')],
+                        [InlineKeyboardButton("🔍 סריקת פורטים רגילה", callback_data='scan_menu')],
+                        [InlineKeyboardButton("📍 איתור IP", callback_data='locate_demo')]
+                    ]
+                    reply_markup = InlineKeyboardMarkup(keyboard)
+                    
+                    await query.edit_message_text(
+                        result_text,
+                        parse_mode='Markdown',
+                        reply_markup=reply_markup
+                    )
+                    
+                    # Clean up pending scan
+                    delattr(self, 'pending_scan')
+                    
+                except Exception as e:
+                    logger.error(f"Error in confirmed range scan: {e}")
+                    await query.edit_message_text(
+                        f"❌ **שגיאה בסריקת הטווח**\n\n"
+                        f"🔍 **טווח:** `{ip_range}`\n"
+                        f"🎯 **פורט:** `{port}`\n"
+                        f"❗ **שגיאה:** `{str(e)}`\n\n"
+                        f"💡 **טיפים:**\n"
+                        f"• נסה טווח קטן יותר\n"
+                        f"• בדוק חיבור לאינטרנט\n"
+                        f"• נסה שוב מאוחר יותר",
+                        parse_mode='Markdown'
+                    )
+            else:
+                await query.edit_message_text("❌ נתוני הסריקה לא נמצאו. נסה שוב.")
         else:
             await query.edit_message_text("🤖 אפשרות לא מזוהה")
 
@@ -846,8 +931,11 @@ class TelegramBot:
             
             # Show warning for large scans
             if estimated_count > 10000:
+                # Store scan parameters temporarily (simple approach)
+                self.pending_scan = {'range': ip_range, 'port': port}
+                
                 keyboard = [
-                    [InlineKeyboardButton("⚠️ המשך בכל זאת", callback_data=f'confirm_scan_{ip_range}_{port}')],
+                    [InlineKeyboardButton("⚠️ המשך בכל זאת", callback_data='confirm_large_scan')],
                     [InlineKeyboardButton("🔙 ביטול", callback_data='range_scan_demo')]
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
