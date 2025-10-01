@@ -431,39 +431,69 @@ class StockAnalyzer:
             return None
 
     def _generate_historical_from_price(self, current_price: float, symbol: str) -> pd.DataFrame:
-        """Generate reasonable historical data from current price"""
+        """Generate realistic historical data from current price"""
         # Create 60 days of mock historical data
         dates = pd.date_range(end=datetime.now(), periods=60, freq='D')
         
         # Use symbol hash for consistent random seed
         np.random.seed(abs(hash(symbol)) % 10000)
         
-        # Generate price walk backwards from current price
-        returns = np.random.normal(0.001, 0.02, len(dates))  # 0.1% daily return, 2% volatility
+        # Generate more realistic price movements with mean reversion
+        prices = []
+        price = current_price
         
-        # Make sure last day has a realistic change (not 0)
-        # Use consistent but non-zero change based on symbol
-        symbol_hash = abs(hash(symbol + str(int(current_price))))
-        last_day_change = (symbol_hash % 100 - 50) / 10000  # Between -0.5% and +0.5%
-        returns[-1] = last_day_change
+        # Work backwards to create realistic historical prices
+        for i in range(len(dates)):
+            # Mean reversion - prices tend to return to a central value
+            if i == len(dates) - 1:
+                # Last day is current price
+                prices.append(current_price)
+            else:
+                # Generate daily return with mean reversion
+                # Smaller daily changes, more realistic volatility
+                daily_return = np.random.normal(0, 0.015)  # 1.5% daily volatility
+                
+                # Apply mean reversion - if price is far from start, pull back
+                days_from_end = len(dates) - 1 - i
+                reversion_factor = 0.002 * days_from_end  # Gentle pull towards current price
+                
+                if i == 0:
+                    # First historical price should be reasonable
+                    starting_price = current_price * np.random.uniform(0.95, 1.05)
+                    prices.append(starting_price)
+                    price = starting_price
+                else:
+                    # Apply return with mean reversion
+                    new_price = price * (1 + daily_return - reversion_factor)
+                    # Keep prices in reasonable range (75% to 125% of current)
+                    new_price = max(current_price * 0.75, min(current_price * 1.25, new_price))
+                    prices.append(new_price)
+                    price = new_price
         
-        prices = [current_price]
-        # Work backwards to create historical prices
-        for i in range(len(dates) - 2, -1, -1):
-            prev_price = prices[0] / (1 + returns[i + 1])
-            prices.insert(0, prev_price)
+        # Reverse to get chronological order
+        prices.reverse()
         
-        # Generate OHLCV data
+        # Generate OHLCV data with realistic intraday movements
         data_points = []
-        for i, price in enumerate(prices):
-            volatility = abs(np.random.normal(0, 0.015))
+        for i, close_price in enumerate(prices):
+            # Realistic intraday volatility (smaller than daily)
+            intraday_range = close_price * np.random.uniform(0.01, 0.03)  # 1-3% intraday range
+            
+            # Generate realistic OHLC
+            high = close_price + (intraday_range * np.random.uniform(0.3, 0.8))
+            low = close_price - (intraday_range * np.random.uniform(0.3, 0.8))
+            open_price = low + (high - low) * np.random.uniform(0.2, 0.8)
+            
+            # Ensure High >= max(Open, Close) and Low <= min(Open, Close)
+            high = max(high, open_price, close_price)
+            low = min(low, open_price, close_price)
             
             data_points.append({
-                'Open': price * np.random.uniform(0.995, 1.005),
-                'High': price * (1 + volatility),
-                'Low': price * (1 - volatility),
-                'Close': price,
-                'Volume': int(np.random.uniform(500000, 3000000))
+                'Open': round(open_price, 2),
+                'High': round(high, 2),
+                'Low': round(low, 2),
+                'Close': round(close_price, 2),
+                'Volume': int(np.random.uniform(800000, 5000000))
             })
         
         df = pd.DataFrame(data_points, index=dates)
@@ -1169,7 +1199,7 @@ class StockAnalyzer:
             else:
                 accuracy = 70  # Default for LSTM
             
-            # Make predictions
+            # Make predictions with reality checks
             predictions = []
             current_sequence = scaled_prices[-lookback:].reshape(1, lookback, 1)
             current_price = df['Close'].iloc[-1]
@@ -1182,15 +1212,42 @@ class StockAnalyzer:
                 predicted_price_array = np.array([[predicted_scaled]])
                 predicted_price = scaler.inverse_transform(predicted_price_array)[0][0]
                 
-                # Enhanced confidence for LSTM
-                base_confidence = max(60, accuracy)  # LSTM usually more confident
-                time_decay = max(0.8, 1 - (day * 0.04))  # Slower decay for neural networks
+                # Apply reality checks to prevent extreme predictions
+                max_daily_change = 0.02  # Maximum 2% daily change (more realistic)
+                
+                if day == 1:
+                    # First day prediction shouldn't be too different from current
+                    max_change = current_price * max_daily_change
+                    predicted_price = max(current_price - max_change, 
+                                        min(current_price + max_change, predicted_price))
+                else:
+                    # Subsequent days: limit cumulative change to be reasonable
+                    # Don't let total change exceed 3% over multiple days
+                    max_total_change = 0.03  # Maximum 3% total change over all days
+                    total_change_so_far = (predictions[-1]['predicted_price'] - current_price) / current_price
+                    
+                    if abs(total_change_so_far) < max_total_change:
+                        # Can still make normal daily moves
+                        prev_prediction = predictions[-1]['predicted_price']
+                        max_change = prev_prediction * max_daily_change
+                        predicted_price = max(prev_prediction - max_change,
+                                            min(prev_prediction + max_change, predicted_price))
+                    else:
+                        # Already at limit - stabilize around current range
+                        prev_prediction = predictions[-1]['predicted_price']
+                        max_change = prev_prediction * 0.005  # Very small change (0.5%)
+                        predicted_price = max(prev_prediction - max_change,
+                                            min(prev_prediction + max_change, predicted_price))
+                
+                # Enhanced confidence for LSTM with reality adjustment
+                base_confidence = max(55, min(80, accuracy))  # More conservative LSTM range
+                time_decay = max(0.7, 1 - (day * 0.06))  # Faster decay for longer predictions
                 confidence = base_confidence * time_decay
-                confidence = max(60, min(85, confidence))  # LSTM range: 60-85%
+                confidence = max(55, min(80, confidence))  # LSTM range: 55-80%
                 
                 # Prediction interval based on recent volatility
                 recent_std = df['Close'].tail(10).std()
-                margin = recent_std * day * 0.4  # Smaller margin for LSTM
+                margin = recent_std * np.sqrt(day) * 0.5  # Margin increases with sqrt(time)
                 
                 predictions.append({
                     'day': day,
@@ -1200,8 +1257,10 @@ class StockAnalyzer:
                     'confidence': round(confidence, 1)
                 })
                 
-                # Update sequence for next prediction
-                new_scaled = np.array([[[predicted_scaled]]])
+                # Update sequence for next prediction using constrained prediction
+                # Re-scale the constrained prediction
+                constrained_scaled = scaler.transform([[predicted_price]])[0][0]
+                new_scaled = np.array([[[constrained_scaled]]])
                 current_sequence = np.concatenate([current_sequence[:, 1:, :], new_scaled], axis=1)
             
             return {
@@ -1260,9 +1319,13 @@ class StockAnalyzer:
             else:
                 predictions = self.simple_prediction(data, prediction_days)
             
+            # Get current price from data
+            current_price = float(data['Close'].iloc[-1])
+            
             return {
                 'symbol': symbol.upper(),
                 'timestamp': datetime.now().isoformat(),
+                'current_price': current_price,
                 'basic_info': info,
                 'technical_indicators': indicators,
                 'signals': signals,
