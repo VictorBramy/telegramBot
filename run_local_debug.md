@@ -1,4 +1,5 @@
 #!/bin/bash
+
 # סקריפט לעצירת הבוט ב-Railway והרצה מקומית
 
 echo "🛑 עוצר את הבוט ב-Railway..."
