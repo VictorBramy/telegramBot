@@ -12,6 +12,7 @@ import threading
 from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
+from typing import Dict
 
 # Import IP location functions
 from locate_ip import analyze_single_ip, geoip_ipapi, geoip_ipinfo
@@ -20,6 +21,13 @@ from locate_ip import analyze_single_ip, geoip_ipapi, geoip_ipinfo
 from network_tools import (NetworkTools, format_port_scan_result, format_ping_result, 
                           IPRangeScanner, format_range_scan_result,
                           export_scan_results_csv, export_scan_results_json, export_scan_results_txt)
+
+# Import stock analysis tools
+try:
+    from stock_analyzer import stock_analyzer, format_stock_analysis
+    STOCK_ANALYSIS_AVAILABLE = True
+except ImportError:
+    STOCK_ANALYSIS_AVAILABLE = False
 
 # Load environment variables
 load_dotenv()
@@ -89,6 +97,11 @@ class TelegramBot:
         self.application.add_handler(CommandHandler("scan", self.port_scan_command))
         self.application.add_handler(CommandHandler("ping", self.ping_command))
         self.application.add_handler(CommandHandler("rangescan", self.range_scan_command))
+        
+        # Stock analysis command (if available)
+        if STOCK_ANALYSIS_AVAILABLE:
+            self.application.add_handler(CommandHandler("stock", self.stock_command))
+            self.application.add_handler(CommandHandler("predict", self.predict_command))
         
         # Callback query handler for inline keyboards
         self.application.add_handler(CallbackQueryHandler(self.button_callback))
@@ -179,6 +192,7 @@ class TelegramBot:
         
         keyboard = [
             [InlineKeyboardButton("🔍 כלי רשת", callback_data='network_tools')],
+            [InlineKeyboardButton("📈 ניתוח מניות", callback_data='stock_tools')],
             [InlineKeyboardButton("� דוגמאות מהירות", callback_data='quick_examples')],
             [InlineKeyboardButton("❓ עזרה ומידע", callback_data='help_info')],
             [InlineKeyboardButton("📞 יצירת קשר", callback_data='contact')]
@@ -218,6 +232,36 @@ class TelegramBot:
                 "בחר את הכלי שברצונך להשתמש בו:",
                 reply_markup=reply_markup
             )
+        
+        elif query.data == 'stock_tools':
+            if STOCK_ANALYSIS_AVAILABLE:
+                # Stock analysis submenu
+                keyboard = [
+                    [InlineKeyboardButton("📊 ניתוח מניה", callback_data='stock_demo')],
+                    [InlineKeyboardButton("🔮 חיזוי מחיר", callback_data='predict_demo')],
+                    [InlineKeyboardButton("📋 דוגמאות", callback_data='stock_examples')],
+                    [InlineKeyboardButton("❓ עזרה", callback_data='stock_help')],
+                    [InlineKeyboardButton("🔙 חזרה לתפריט ראשי", callback_data='main_menu')]
+                ]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                await query.edit_message_text(
+                    "📈 **כלי ניתוח מניות ובורסה**\n\n"
+                    "🔍 ניתוח טכני מתקדם\n"
+                    "🤖 חיזוי מחירים בבינה מלאכותית\n"
+                    "📊 אינדיקטורים טכניים\n"
+                    "📥 ייצוא נתונים לקבצים\n\n"
+                    "בחר את הכלי שברצונך להשתמש בו:",
+                    reply_markup=reply_markup
+                )
+            else:
+                await query.edit_message_text(
+                    "❌ **שירות ניתוח מניות לא זמין כרגע**\n\n"
+                    "חסרים חבילות נדרשות לניתוח מניות.\n"
+                    "אנא פנה למפתח הבוט לעדכון.",
+                    reply_markup=InlineKeyboardMarkup([[
+                        InlineKeyboardButton("🔙 חזרה לתפריט ראשי", callback_data='main_menu')
+                    ]])
+                )
         
         elif query.data == 'scan_menu':
             # Port scanning submenu with different scan types
@@ -713,8 +757,291 @@ class TelegramBot:
         elif query.data == 'download_ping_txt':
             await self.send_scan_file(query, context, 'ping', 'txt')
         
+        # Stock analysis handlers
+        elif query.data == 'download_stock_csv':
+            await self.send_stock_file(query, context, 'csv')
+        elif query.data == 'download_stock_json':
+            await self.send_stock_file(query, context, 'json')
+        elif query.data == 'stock_demo':
+            await query.edit_message_text(
+                "📈 **ניתוח מניות מתקדם**\n\n"
+                "גלה הכל על המניות שלך!\n"
+                "`/stock <סמל מניה>`\n\n"
+                "🔹 **מניות פופולריות:**\n"
+                "• **טק:** `/stock AAPL`, `/stock MSFT`, `/stock GOOGL`\n"
+                "• **AI:** `/stock NVDA`, `/stock AMD`, `/stock META`\n"
+                "• **רכב:** `/stock TSLA`, `/stock F`, `/stock GM`\n"
+                "• **כספים:** `/stock JPM`, `/stock BAC`, `/stock WFC`\n\n"
+                "🔮 **חיזויים מתקדמים:**\n"
+                "`/predict <סמל> [ימים]`\n\n"
+                "🤖 **AI Features:**\n"
+                "• מודלי Machine Learning\n"
+                "• ניתוח מחוונים טכניים\n"
+                "• תחזיות בטווח ביטחון\n"
+                "• סיגנלים לקנייה/מכירה",
+                parse_mode='Markdown'
+            )
+        
+        # Handle stock prediction callbacks
+        elif query.data.startswith('stock_predict_'):
+            symbol = query.data.replace('stock_predict_', '')
+            await query.edit_message_text(
+                f"🔮 **חיזוי מפורט עבור {symbol}**\n\n"
+                f"השתמש בפקודה:\n"
+                f"`/predict {symbol} [ימים]`\n\n"
+                f"דוגמאות:\n"
+                f"• `/predict {symbol} 5` - חיזוי ל-5 ימים\n"
+                f"• `/predict {symbol} 10` - חיזוי ל-10 ימים\n\n"
+                f"🤖 החיזוי כולל:\n"
+                f"• מחירים חזויים יומיים\n"
+                f"• טווחי ביטחון\n"
+                f"• רמת דיוק המודל\n"
+                f"• ניתוח טרנד כללי",
+                parse_mode='Markdown'
+            )
+        
+        elif query.data.startswith('stock_full_'):
+            symbol = query.data.replace('stock_full_', '')
+            await query.edit_message_text(
+                f"📈 **ניתוח מלא עבור {symbol}**\n\n"
+                f"השתמש בפקודה:\n"
+                f"`/stock {symbol}`\n\n"
+                f"קבל ניתוח מקיף הכולל:\n"
+                f"• מחוונים טכניים מתקדמים\n"
+                f"• סיגנלים לקנייה/מכירה\n"
+                f"• תחזיות AI\n"
+                f"• רמות תמיכה והתנגדות\n"
+                f"• ניתוח נפח וטרנדים",
+                parse_mode='Markdown'
+            )
+        
+        elif query.data.startswith('predict_again_'):
+            symbol = query.data.replace('predict_again_', '')
+            await query.edit_message_text(
+                f"🔄 **חזרה על החיזוי עבור {symbol}**\n\n"
+                f"השתמש שוב בפקודה:\n"
+                f"`/predict {symbol} [ימים]`\n\n"
+                f"או נסה תחזיות לטווחים שונים:\n"
+                f"• `/predict {symbol} 3` - טווח קצר\n"
+                f"• `/predict {symbol} 7` - שבוע\n"
+                f"• `/predict {symbol} 15` - טווח בינוני\n"
+                f"• `/predict {symbol} 30` - טווח ארוך",
+                parse_mode='Markdown'
+            )
+        
+        elif query.data == 'stock_demo':
+            await query.edit_message_text(
+                "📊 **ניתוח מניה מתקדם**\n\n"
+                "קבל ניתוח טכני מקצועי של כל מניה!\n"
+                "`/stock <סמל מניה>`\n\n"
+                "🔹 **דוגמאות:**\n"
+                "• **אפל:** `/stock AAPL`\n"
+                "• **מיקרוסופט:** `/stock MSFT`\n"
+                "• **גוגל:** `/stock GOOGL`\n"
+                "• **טסלה:** `/stock TSLA`\n\n"
+                "📊 **הניתוח כולל:**\n"
+                "• מחיר נוכחי ושינוי יומי\n"
+                "• RSI, MACD, בולינגר באנדס\n"
+                "• ממוצעים נעים\n"
+                "• אותות קנייה/מכירה\n"
+                "• ייצוא נתונים ל-CSV/JSON",
+                parse_mode='Markdown'
+            )
+
+        elif query.data == 'predict_demo':
+            await query.edit_message_text(
+                "🔮 **חיזוי מחירי מניות**\n\n"
+                "חיזוי מחירים בבינה מלאכותית!\n"
+                "`/predict <סמל מניה> [ימים]`\n\n"
+                "🔹 **דוגמאות:**\n"
+                "• **חיזוי שבוע:** `/predict AAPL 7`\n"
+                "• **חיזוי חודש:** `/predict MSFT 30`\n"
+                "• **חיזוי ברירת מחדל:** `/predict GOOGL`\n\n"
+                "🤖 **הבינה המלאכותית:**\n"
+                "• אלגוריתם Random Forest\n"
+                "• אנליזה של 60 ימי מסחר\n"
+                "• אינדיקטורים טכניים\n"
+                "• רמת ודאות לחיזוי\n"
+                "• טווח מחירים צפוי",
+                parse_mode='Markdown'
+            )
+
+        elif query.data == 'stock_examples':
+            await query.edit_message_text(
+                "📋 **דוגמאות מניות פופולריות**\n\n"
+                "🇺🇸 **מניות אמריקאיות:**\n"
+                "• AAPL - Apple Inc.\n"
+                "• MSFT - Microsoft\n"
+                "• GOOGL - Alphabet (Google)\n"
+                "• TSLA - Tesla\n"
+                "• AMZN - Amazon\n"
+                "• META - Meta (Facebook)\n"
+                "• NVDA - NVIDIA\n"
+                "• NFLX - Netflix\n\n"
+                "💡 **טיפים:**\n"
+                "• השתמש בסמלי מניות באנגלית\n"
+                "• בדוק מניות בבורסת NASDAQ\n"
+                "• נתוני היסטוריה מ-Yahoo Finance\n"
+                "• עדכונים בזמן אמת",
+                parse_mode='Markdown'
+            )
+
+        elif query.data == 'stock_help':
+            await query.edit_message_text(
+                "❓ **עזרה - כלי ניתוח מניות**\n\n"
+                "📊 **פקודות זמינות:**\n"
+                "• `/stock <סמל>` - ניתוח מלא\n"
+                "• `/predict <סמל> [ימים]` - חיזוי AI\n\n"
+                "🔹 **פורמט סמלי מניות:**\n"
+                "• השתמש באותיות באנגלית בלבד\n"
+                "• 1-5 תווים (לדוגמה: AAPL, MSFT)\n"
+                "• רגיש לאותיות גדולות/קטנות\n\n"
+                "📈 **אינדיקטורים טכניים:**\n"
+                "• **RSI** - אינדיקס כוח יחסי (0-100)\n"
+                "• **MACD** - קו מגמה מתכנס/מתפרק\n"
+                "• **Bollinger Bands** - רצועות תנודתיות\n"
+                "• **Moving Averages** - ממוצעים נעים\n\n"
+                "🤖 **חיזוי בינה מלאכותית:**\n"
+                "• אלגוריתם Random Forest מתקדם\n"
+                "• ניתוח 60 ימי מסחר אחרונים\n"
+                "• רמת ודאות וטווח חיזוי\n"
+                "• ייצוא נתונים מפורטים",
+                parse_mode='Markdown'
+            )
+        
         else:
             await query.edit_message_text("🤖 אפשרות לא מזוהה")
+
+    async def send_stock_file(self, query, context, file_format: str):
+        """Send stock analysis as a downloadable file"""
+        import io
+        import json
+        from datetime import datetime
+        
+        try:
+            # Get the stored analysis
+            analysis = getattr(self, 'last_stock_analysis', None)
+            if not analysis:
+                await query.edit_message_text("❌ לא נמצא ניתוח מניה להורדה. בצע ניתוח תחילה.")
+                return
+            
+            # Generate file content
+            if file_format == 'csv':
+                # Create CSV content for stock analysis
+                content = self.format_stock_csv(analysis)
+                mime_type = 'text/csv'
+                file_ext = 'csv'
+            elif file_format == 'json':
+                content = json.dumps(analysis, indent=2, ensure_ascii=False, default=str)
+                mime_type = 'application/json'
+                file_ext = 'json'
+            else:
+                await query.edit_message_text("❌ פורמט קובץ לא תקין")
+                return
+            
+            # Create filename
+            symbol = analysis.get('symbol', 'UNKNOWN')
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            filename = f"TelegramBot_Stock_{symbol}_{timestamp}.{file_ext}"
+            
+            # Create file buffer
+            file_buffer = io.BytesIO(content.encode('utf-8'))
+            file_buffer.name = filename
+            
+            await query.edit_message_text("📤 מכין קובץ להורדה...")
+            
+            # Send file
+            chat_id = query.message.chat_id
+            user_name = query.from_user.first_name
+            
+            await context.bot.send_document(
+                chat_id=chat_id,
+                document=file_buffer,
+                filename=filename,
+                caption=f"📈 **ניתוח מניה - {symbol}**\n\n"
+                       f"📅 **תאריך:** {datetime.now().strftime('%d/%m/%Y %H:%M')}\n"
+                       f"📁 **פורמט:** {file_format.upper()}\n"
+                       f"👤 **הוכן עבור:** {user_name}\n\n"
+                       f"💾 **הקובץ מוכן להורדה!**",
+                parse_mode='Markdown'
+            )
+            
+            await query.edit_message_text(
+                f"✅ **קובץ ניתוח נשלח בהצלחה!**\n\n"
+                f"📁 **שם קובץ:** `{filename}`\n"
+                f"📊 **פורמט:** {file_format.upper()}\n"
+                f"📈 **מניה:** {symbol}\n\n"
+                f"💡 **הקובץ כולל:** ניתוח מלא עם תחזיות"
+            )
+            
+        except Exception as e:
+            logger.error(f"Error sending stock file: {e}")
+            await query.edit_message_text(
+                f"❌ **שגיאה ביצירת קובץ המניה**\n\n"
+                f"❗ **שגיאה:** `{str(e)}`\n\n"
+                f"🔄 נסה שוב מאוחר יותר"
+            )
+    
+    def format_stock_csv(self, analysis: Dict) -> str:
+        """Format stock analysis as CSV"""
+        import csv
+        import io
+        from datetime import datetime
+        
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Header
+        writer.writerow(['# Stock Analysis Export'])
+        writer.writerow(['# Symbol:', analysis.get('symbol', 'N/A')])
+        writer.writerow(['# Date:', datetime.now().strftime('%Y-%m-%d %H:%M:%S')])
+        writer.writerow(['# Generated by TelegramBot'])
+        writer.writerow([])
+        
+        # Basic info
+        info = analysis.get('basic_info', {})
+        writer.writerow(['Basic Information'])
+        writer.writerow(['Field', 'Value'])
+        writer.writerow(['Company Name', info.get('name', 'N/A')])
+        writer.writerow(['Sector', info.get('sector', 'N/A')])
+        writer.writerow(['Industry', info.get('industry', 'N/A')])
+        writer.writerow(['Market Cap', info.get('market_cap', 'N/A')])
+        writer.writerow(['P/E Ratio', info.get('pe_ratio', 'N/A')])
+        writer.writerow([])
+        
+        # Technical indicators
+        indicators = analysis.get('technical_indicators', {})
+        writer.writerow(['Technical Indicators'])
+        writer.writerow(['Indicator', 'Value'])
+        writer.writerow(['Current Price', indicators.get('current_price', 'N/A')])
+        writer.writerow(['Price Change', indicators.get('price_change', 'N/A')])
+        writer.writerow(['Price Change %', indicators.get('price_change_pct', 'N/A')])
+        writer.writerow(['RSI', indicators.get('rsi', 'N/A')])
+        writer.writerow(['SMA 20', indicators.get('sma_20', 'N/A')])
+        writer.writerow(['SMA 50', indicators.get('sma_50', 'N/A')])
+        writer.writerow(['MACD', indicators.get('macd', 'N/A')])
+        writer.writerow(['Volume Ratio', indicators.get('volume_ratio', 'N/A')])
+        writer.writerow(['Support', indicators.get('support', 'N/A')])
+        writer.writerow(['Resistance', indicators.get('resistance', 'N/A')])
+        writer.writerow([])
+        
+        # Predictions
+        predictions = analysis.get('predictions', {})
+        if 'predictions' in predictions:
+            writer.writerow(['Price Predictions'])
+            writer.writerow(['Day', 'Predicted Price', 'Lower Bound', 'Upper Bound', 'Confidence %'])
+            for pred in predictions['predictions']:
+                writer.writerow([
+                    pred.get('day', ''),
+                    pred.get('predicted_price', ''),
+                    pred.get('lower_bound', ''),
+                    pred.get('upper_bound', ''),
+                    pred.get('confidence', '')
+                ])
+        
+        content = output.getvalue()
+        output.close()
+        return content
 
     async def send_scan_file(self, query, context, scan_type: str, file_format: str):
         """Send scan results as a downloadable file"""
@@ -1366,6 +1693,218 @@ class TelegramBot:
         
         # Start polling
         self.application.run_polling(allowed_updates=Update.ALL_TYPES)
+
+    async def stock_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /stock command for stock analysis"""
+        if not STOCK_ANALYSIS_AVAILABLE:
+            await update.message.reply_text(
+                "❌ Stock analysis is not available. Missing required packages:\n"
+                "• yfinance\n• pandas\n• numpy\n• scikit-learn"
+            )
+            return
+        
+        user_name = update.effective_user.first_name
+        user_id = update.effective_user.id
+        username = update.effective_user.username or "ללא שם משתמש"
+        
+        if not context.args:
+            logger.info(f"📈 /stock (ללא פרמטר) - משתמש: {user_name} (@{username}) | ID: {user_id}")
+            await update.message.reply_text(
+                "📈 **ניתוח מניות מתקדם**\n\n"
+                "שימוש: `/stock <סמל מניה>`\n\n"
+                "🔹 **דוגמאות:**\n"
+                "• `/stock AAPL` - אפל\n"
+                "• `/stock MSFT` - מיקרוסופט\n"
+                "• `/stock GOOGL` - גוגל\n"
+                "• `/stock TSLA` - טסלה\n"
+                "• `/stock NVDA` - נבידיה\n\n"
+                "📊 **מה תקבל:**\n"
+                "• מחוונים טכניים מתקדמים\n"
+                "• סיגנלים לקנייה/מכירה\n"
+                "• תחזיות מחיר באמצעות AI\n"
+                "• רמות תמיכה והתנגדות\n"
+                "• ניתוח נפח וטרנדים",
+                parse_mode='Markdown'
+            )
+            return
+        
+        symbol = context.args[0].upper()
+        logger.info(f"📈 /stock '{symbol}' - משתמש: {user_name} (@{username}) | ID: {user_id}")
+        
+        # Show processing message
+        processing_msg = await update.message.reply_text(
+            f"📈 מנתח מניה: {symbol}\n"
+            f"📊 אוסף נתונים מ-Yahoo Finance...\n"
+            f"🤖 מבצע ניתוח טכני ו-AI...\n"
+            f"⏳ זה עלול לקחת 10-15 שניות..."
+        )
+        
+        try:
+            # Perform stock analysis
+            analysis = await stock_analyzer.analyze_stock(symbol)
+            
+            # Format results
+            result_text = format_stock_analysis(analysis)
+            
+            # Store analysis for download
+            self.last_stock_analysis = analysis
+            
+            # Create interactive keyboard
+            keyboard = [
+                [InlineKeyboardButton("💾 הורד ניתוח CSV", callback_data='download_stock_csv'),
+                 InlineKeyboardButton("📄 הורד כ-JSON", callback_data='download_stock_json')],
+                [InlineKeyboardButton("🔮 תחזיות מפורטות", callback_data=f'stock_predict_{symbol}')],
+                [InlineKeyboardButton("📊 ניתוח מניה אחרת", callback_data='stock_demo')],
+                [InlineKeyboardButton("📋 תפריט ראשי", callback_data='main_menu')]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await processing_msg.edit_text(
+                result_text,
+                parse_mode='Markdown',
+                reply_markup=reply_markup
+            )
+            
+        except Exception as e:
+            logger.error(f"Error in stock_command: {e}")
+            await processing_msg.edit_text(
+                f"❌ **שגיאה בניתוח המניה**\n\n"
+                f"📈 **סמל:** {symbol}\n"
+                f"❗ **שגיאה:** `{str(e)}`\n\n"
+                f"💡 **טיפים:**\n"
+                f"• בדוק שהסמל תקין (AAPL, MSFT וכו')\n"
+                f"• נסה עם סמל אחר\n"
+                f"• נסה שוב מאוחר יותר\n"
+                f"• וודא שיש חיבור לאינטרנט",
+                parse_mode='Markdown'
+            )
+
+    async def predict_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /predict command for detailed stock predictions"""
+        if not STOCK_ANALYSIS_AVAILABLE:
+            await update.message.reply_text(
+                "❌ Stock prediction is not available. Missing required packages."
+            )
+            return
+        
+        user_name = update.effective_user.first_name
+        user_id = update.effective_user.id
+        username = update.effective_user.username or "ללא שם משתמש"
+        
+        if not context.args:
+            await update.message.reply_text(
+                "🔮 **חיזוי מחירי מניות**\n\n"
+                "שימוש: `/predict <סמל> [ימים]`\n\n"
+                "🔹 **דוגמאות:**\n"
+                "• `/predict AAPL` - חיזוי ל-5 ימים\n"
+                "• `/predict TSLA 10` - חיזוי ל-10 ימים\n"
+                "• `/predict NVDA 3` - חיזוי ל-3 ימים\n\n"
+                "🤖 **שימושים AI מתקדם:**\n"
+                "• Random Forest Machine Learning\n"
+                "• ניתוח מחוונים טכניים\n"
+                "• חיזוי בטווח ביטחון\n"
+                "• הערכת דיוק המודל",
+                parse_mode='Markdown'
+            )
+            return
+        
+        symbol = context.args[0].upper()
+        days = int(context.args[1]) if len(context.args) > 1 else 5
+        days = min(max(days, 1), 30)  # Limit to 1-30 days
+        
+        logger.info(f"🔮 /predict '{symbol}' {days} days - משתמש: {user_name} (@{username}) | ID: {user_id}")
+        
+        processing_msg = await update.message.reply_text(
+            f"🔮 מחשב חיזוי עבור {symbol}\n"
+            f"📅 תחזית ל-{days} ימים\n"
+            f"🤖 מפעיל מודלי AI...\n"
+            f"⏳ אנא המתן..."
+        )
+        
+        try:
+            # Get detailed analysis with predictions
+            analysis = await stock_analyzer.analyze_stock(symbol, days)
+            
+            if 'error' in analysis:
+                await processing_msg.edit_text(
+                    f"❌ שגיאה בחיזוי: {analysis['error']}"
+                )
+                return
+            
+            predictions = analysis.get('predictions', {})
+            if 'error' in predictions:
+                await processing_msg.edit_text(
+                    f"❌ שגיאה בחיזוי: {predictions['error']}"
+                )
+                return
+            
+            # Format detailed predictions
+            response = f"🔮 **חיזוי מחירים - {symbol}**\n\n"
+            
+            # Model info
+            method = predictions.get('method', 'Unknown')
+            accuracy = predictions.get('model_accuracy')
+            response += f"🤖 **Method:** {method}\n"
+            if accuracy:
+                response += f"📊 **Model Accuracy:** {accuracy}%\n"
+            
+            # Current price from indicators
+            indicators = analysis.get('technical_indicators', {})
+            if 'current_price' in indicators:
+                response += f"💰 **Current Price:** ${indicators['current_price']}\n"
+            
+            response += f"\n📅 **תחזיות ל-{days} ימים:**\n\n"
+            
+            # Detailed predictions
+            if 'predictions' in predictions:
+                for pred in predictions['predictions']:
+                    day = pred['day']
+                    price = pred['predicted_price']
+                    conf = pred['confidence']
+                    lower = pred.get('lower_bound', price)
+                    upper = pred.get('upper_bound', price)
+                    
+                    trend = "📈" if price > indicators.get('current_price', price) else "📉"
+                    
+                    response += f"**Day {day}:** {trend} ${price}\n"
+                    response += f"   Range: ${lower} - ${upper}\n"
+                    response += f"   Confidence: {conf}%\n\n"
+            
+            # Add trend info
+            if 'trend' in predictions:
+                trend = predictions['trend']
+                trend_emoji = "📈" if trend == 'UP' else "📉" if trend == 'DOWN' else "➡️"
+                response += f"{trend_emoji} **Overall Trend:** {trend}\n"
+            
+            if 'volatility' in predictions:
+                response += f"📊 **Volatility:** ${predictions['volatility']}\n"
+            
+            response += f"\n⚠️ **Disclaimer:** חיזויים למטרות חינוכיות בלבד"
+            
+            # Interactive keyboard
+            keyboard = [
+                [InlineKeyboardButton("📈 ניתוח מלא", callback_data=f'stock_full_{symbol}')],
+                [InlineKeyboardButton("🔄 חזור על החיזוי", callback_data=f'predict_again_{symbol}')],
+                [InlineKeyboardButton("📊 מניה אחרת", callback_data='stock_demo')]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await processing_msg.edit_text(
+                response,
+                parse_mode='Markdown',
+                reply_markup=reply_markup
+            )
+            
+        except Exception as e:
+            logger.error(f"Error in predict_command: {e}")
+            await processing_msg.edit_text(
+                f"❌ **שגיאה בחיזוי**\n\n"
+                f"📈 **סמל:** {symbol}\n"
+                f"📅 **ימים:** {days}\n"
+                f"❗ **שגיאה:** `{str(e)}`",
+                parse_mode='Markdown'
+            )
+
 
 def main():
     """Main function to run the bot"""
