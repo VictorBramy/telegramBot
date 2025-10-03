@@ -13,6 +13,15 @@ import asyncio
 import warnings
 warnings.filterwarnings('ignore')
 
+# Import learning system
+try:
+    from model_memory import model_memory
+    MEMORY_AVAILABLE = True
+    print("Learning Memory System loaded!")
+except ImportError:
+    MEMORY_AVAILABLE = False
+    print("Learning Memory System not available")
+
 # Try to import alternative finance APIs
 GOOGLE_FINANCE_AVAILABLE = False
 ALPHA_VANTAGE_AVAILABLE = False
@@ -362,8 +371,8 @@ class StockAnalyzer:
     def _try_simple_api(self, symbol: str, period: str) -> Optional[pd.DataFrame]:
         """Try simple free APIs that don't require authentication"""
         try:
-            # Method 1: Yahoo Finance JSON API (most reliable)
-            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
+            # Method 1: Yahoo Finance JSON API (most reliable) - GET REAL DATA
+            url = f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?range=3mo&interval=1d"
             headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
             
             response = requests.get(url, headers=headers, timeout=10)
@@ -373,11 +382,49 @@ class StockAnalyzer:
                 result = chart.get('result', [])
                 
                 if result and len(result) > 0:
+                    # Extract REAL historical data
+                    timestamps = result[0].get('timestamp', [])
+                    indicators = result[0].get('indicators', {})
+                    quotes = indicators.get('quote', [{}])
+                    
+                    if quotes and len(quotes) > 0 and timestamps:
+                        quote_data = quotes[0]
+                        opens = quote_data.get('open', [])
+                        highs = quote_data.get('high', [])
+                        lows = quote_data.get('low', [])
+                        closes = quote_data.get('close', [])
+                        volumes = quote_data.get('volume', [])
+                        
+                        # Filter out None values and create DataFrame with REAL data
+                        real_data = []
+                        for i in range(len(timestamps)):
+                            if (i < len(closes) and closes[i] is not None and
+                                i < len(opens) and opens[i] is not None and
+                                i < len(highs) and highs[i] is not None and
+                                i < len(lows) and lows[i] is not None):
+                                
+                                real_data.append({
+                                    'Open': round(opens[i], 2),
+                                    'High': round(highs[i], 2), 
+                                    'Low': round(lows[i], 2),
+                                    'Close': round(closes[i], 2),
+                                    'Volume': volumes[i] if i < len(volumes) and volumes[i] else 1000000
+                                })
+                        
+                        if len(real_data) >= 30:  # Need enough data
+                            # Convert timestamps to dates
+                            dates = pd.to_datetime([datetime.fromtimestamp(ts) for ts in timestamps[:len(real_data)]])
+                            df = pd.DataFrame(real_data, index=dates)
+                            current_price = df['Close'].iloc[-1]
+                            print(f"Yahoo REAL DATA: {symbol} = ${current_price:.2f} ({len(real_data)} days)")
+                            return df
+                    
+                    # Fallback: if we can't get full historical, try current price method
                     meta = result[0].get('meta', {})
                     current_price = meta.get('regularMarketPrice')
                     
                     if current_price and current_price > 0:
-                        print(f"Yahoo JSON API: {symbol} = ${current_price:.2f}")
+                        print(f"Yahoo current price fallback: {symbol} = ${current_price:.2f}")
                         return self._generate_historical_from_price(current_price, symbol)
                     
                     # Fallback: try to get from historical data
@@ -1311,18 +1358,46 @@ class StockAnalyzer:
             # Generate signals
             signals = self.generate_signals(indicators)
             
-            # Get predictions - LSTM first, then ML ensemble, then simple
-            if DEEP_LEARNING_AVAILABLE and len(data) >= 60:
-                predictions = self.lstm_prediction(data, prediction_days)
-            elif ML_AVAILABLE and len(data) >= 50:
-                predictions = self.ml_prediction(data, prediction_days)
-            else:
-                predictions = self.simple_prediction(data, prediction_days)
-            
             # Get current price from data
             current_price = float(data['Close'].iloc[-1])
             
-            return {
+            # LEARNING SYSTEM: Verify previous predictions
+            if MEMORY_AVAILABLE:
+                model_memory.verify_predictions(symbol, current_price)
+                performance = model_memory.get_model_performance()
+                patterns = model_memory.learn_from_patterns(symbol, data)
+            
+            # Get predictions with adaptive method selection
+            method_weights = {}
+            if MEMORY_AVAILABLE:
+                method_weights['LSTM'] = model_memory.should_use_method('LSTM Neural Network')
+                method_weights['ML'] = model_memory.should_use_method('ML Ensemble') 
+                method_weights['Simple'] = model_memory.should_use_method('Simple Prediction')
+            else:
+                method_weights = {'LSTM': 1.0, 'ML': 1.0, 'Simple': 1.0}
+            
+            # Choose best method based on learning
+            if DEEP_LEARNING_AVAILABLE and len(data) >= 60 and method_weights.get('LSTM', 1.0) >= 0.8:
+                predictions = self.lstm_prediction(data, prediction_days)
+                method_used = 'LSTM Neural Network'
+            elif ML_AVAILABLE and len(data) >= 50 and method_weights.get('ML', 1.0) >= 0.8:
+                predictions = self.ml_prediction(data, prediction_days)
+                method_used = 'ML Ensemble'
+            else:
+                predictions = self.simple_prediction(data, prediction_days)
+                method_used = 'Simple Prediction'
+            
+            # Log prediction for learning
+            if MEMORY_AVAILABLE and 'predictions' in predictions and predictions['predictions']:
+                first_prediction = predictions['predictions'][0]
+                model_memory.log_prediction(
+                    symbol=symbol,
+                    predicted_price=first_prediction['predicted_price'],
+                    confidence=first_prediction['confidence'],
+                    method=method_used
+                )
+            
+            result = {
                 'symbol': symbol.upper(),
                 'timestamp': datetime.now().isoformat(),
                 'current_price': current_price,
@@ -1333,6 +1408,14 @@ class StockAnalyzer:
                 'data_points': len(data),
                 'ml_available': ML_AVAILABLE
             }
+            
+            # Add learning stats if available
+            if MEMORY_AVAILABLE:
+                result['learning_stats'] = performance
+                result['market_patterns'] = patterns
+                result['method_weights'] = method_weights
+            
+            return result
             
         except Exception as e:
             return {'error': str(e)}

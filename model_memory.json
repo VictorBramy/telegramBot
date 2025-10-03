@@ -1,0 +1,53 @@
+{
+  "predictions_log": [
+    {
+      "symbol": "AAPL",
+      "predicted_price": "254.74",
+      "confidence": 75.2,
+      "method": "LSTM Neural Network",
+      "prediction_date": "2025-10-03T17:53:05.364024",
+      "target_date": "2025-10-04T17:53:05.364029",
+      "verified": false,
+      "actual_price": null,
+      "accuracy": null
+    },
+    {
+      "symbol": "AAPL",
+      "predicted_price": 252.77,
+      "confidence": 75.2,
+      "method": "LSTM Neural Network",
+      "prediction_date": "2025-10-03T17:53:29.809161",
+      "target_date": "2025-10-04T17:53:29.809167",
+      "verified": false,
+      "actual_price": null,
+      "accuracy": null
+    }
+  ],
+  "model_performance": {},
+  "market_patterns": {
+    "AAPL": [
+      {
+        "date": "2025-10-03T17:53:02.196952",
+        "patterns": {
+          "avg_volatility": 1.53,
+          "recent_trend": 0.77,
+          "position_in_range": 0.97
+        }
+      },
+      {
+        "date": "2025-10-03T17:53:26.863434",
+        "patterns": {
+          "avg_volatility": 1.53,
+          "recent_trend": 0.72,
+          "position_in_range": 0.966
+        }
+      }
+    ]
+  },
+  "best_settings": {},
+  "learning_stats": {
+    "total_predictions": 2,
+    "correct_predictions": 0,
+    "accuracy_trend": []
+  }
+}
