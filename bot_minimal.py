@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 # Try to import optional modules - graceful fallback
 STOCK_AVAILABLE = False
 NETWORK_AVAILABLE = False
+IP_LOCATION_AVAILABLE = False
 
 try:
     from stock_analyzer import stock_analyzer, format_stock_analysis
@@ -35,6 +36,13 @@ try:
     logger.info("Network tools loaded successfully")
 except Exception as e:
     logger.warning(f"Network tools not available: {e}")
+
+try:
+    from locate_ip import analyze_single_ip, geoip_ipapi, geoip_ipinfo
+    IP_LOCATION_AVAILABLE = True
+    logger.info("IP location tools loaded successfully")
+except Exception as e:
+    logger.warning(f"IP location tools not available: {e}")
 
 class MinimalBot:
     def __init__(self, token: str):
@@ -57,6 +65,11 @@ class MinimalBot:
         if NETWORK_AVAILABLE:
             self.application.add_handler(CommandHandler("ping", self.ping_command))
             self.application.add_handler(CommandHandler("scan", self.scan_command))
+            
+        # IP location tools (if available)
+        if IP_LOCATION_AVAILABLE:
+            self.application.add_handler(CommandHandler("locate", self.locate_command))
+            self.application.add_handler(CommandHandler("ip", self.ip_command))
         
         # Message handler
         self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.echo))
@@ -88,6 +101,10 @@ class MinimalBot:
             if NETWORK_AVAILABLE:
                 help_text += "/ping <HOST> - Ping a host\n"
                 help_text += "/scan <IP> - Scan ports\n"
+                
+            if IP_LOCATION_AVAILABLE:
+                help_text += "/locate <IP> - Find IP location\n"
+                help_text += "/ip <IP> - Get IP details\n"
             
             help_text += "\nBot is running in cloud mode ☁️"
             
@@ -228,6 +245,110 @@ class MinimalBot:
         except Exception as e:
             logger.error(f"Scan command error: {e}")
             await update.message.reply_text(f"❌ Error scanning {target}: {str(e)}")
+
+    async def locate_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /locate command"""
+        if not IP_LOCATION_AVAILABLE:
+            await update.message.reply_text("❌ IP location tools not available in this deployment")
+            return
+            
+        try:
+            if not context.args:
+                await update.message.reply_text(
+                    "📍 **IP Location Finder**\n\n"
+                    "Usage: `/locate <IP>`\n\n"
+                    "Examples:\n"
+                    "• `/locate 8.8.8.8`\n"
+                    "• `/locate 1.1.1.1`\n"
+                    "• `/locate 208.67.222.222`"
+                )
+                return
+                
+            ip = context.args[0]
+            status_msg = await update.message.reply_text(f"📍 Finding location for {ip}...")
+            
+            # Get location data (using sync function)
+            result = analyze_single_ip(ip)
+            
+            if result and 'error' not in result:
+                response = f"📍 **IP Location - {ip}**\n\n"
+                response += f"🌍 **Country:** {result.get('country', 'Unknown')}\n"
+                response += f"🏙️ **City:** {result.get('city', 'Unknown')}\n"
+                response += f"📍 **Region:** {result.get('region', 'Unknown')}\n"
+                response += f"🏢 **ISP:** {result.get('isp', 'Unknown')}\n"
+                response += f"🏛️ **Organization:** {result.get('org', 'Unknown')}\n"
+                
+                if 'lat' in result and 'lon' in result:
+                    response += f"🗺️ **Coordinates:** {result['lat']}, {result['lon']}\n"
+                    
+                if 'timezone' in result:
+                    response += f"🕒 **Timezone:** {result['timezone']}"
+            else:
+                error_msg = result.get('error', 'Location lookup failed') if result else 'Location lookup failed'
+                response = f"❌ {error_msg}"
+                
+            await status_msg.edit_text(response)
+            
+        except Exception as e:
+            logger.error(f"Locate command error: {e}")
+            await update.message.reply_text(f"❌ Error locating {ip}: {str(e)}")
+
+    async def ip_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /ip command - detailed IP information"""
+        if not IP_LOCATION_AVAILABLE:
+            await update.message.reply_text("❌ IP location tools not available in this deployment")
+            return
+            
+        try:
+            if not context.args:
+                await update.message.reply_text(
+                    "🔍 **IP Information Tool**\n\n"
+                    "Usage: `/ip <IP>`\n\n"
+                    "Examples:\n"
+                    "• `/ip 8.8.8.8` - Google DNS\n"
+                    "• `/ip 1.1.1.1` - Cloudflare DNS\n"
+                    "• `/ip 208.67.222.222` - OpenDNS"
+                )
+                return
+                
+            ip = context.args[0]
+            status_msg = await update.message.reply_text(f"🔍 Analyzing IP {ip}...")
+            
+            # Try multiple sources for comprehensive data (using sync functions)
+            ipapi_result = geoip_ipapi(ip)
+            ipinfo_result = geoip_ipinfo(ip)
+            
+            response = f"🔍 **IP Analysis - {ip}**\n\n"
+            
+            # Combine results from multiple sources
+            if ipapi_result and 'error' not in ipapi_result:
+                response += f"📊 **Geographic Data:**\n"
+                response += f"• Country: {ipapi_result.get('country', 'Unknown')} ({ipapi_result.get('countryCode', 'XX')})\n"
+                response += f"• Region: {ipapi_result.get('regionName', 'Unknown')}\n"
+                response += f"• City: {ipapi_result.get('city', 'Unknown')}\n"
+                response += f"• ZIP: {ipapi_result.get('zip', 'Unknown')}\n"
+                response += f"• ISP: {ipapi_result.get('isp', 'Unknown')}\n"
+                response += f"• Organization: {ipapi_result.get('org', 'Unknown')}\n"
+                response += f"• AS: {ipapi_result.get('as', 'Unknown')}\n"
+                
+                if 'lat' in ipapi_result and 'lon' in ipapi_result:
+                    response += f"• Coordinates: {ipapi_result['lat']}, {ipapi_result['lon']}\n"
+                    
+            elif ipinfo_result and 'error' not in ipinfo_result:
+                response += f"📊 **Geographic Data (IPInfo):**\n"
+                response += f"• Location: {ipinfo_result.get('city', 'Unknown')}, {ipinfo_result.get('region', 'Unknown')}, {ipinfo_result.get('country', 'Unknown')}\n"
+                response += f"• Organization: {ipinfo_result.get('org', 'Unknown')}\n"
+                
+                if 'loc' in ipinfo_result:
+                    response += f"• Coordinates: {ipinfo_result['loc']}\n"
+            else:
+                response += "❌ Could not retrieve detailed IP information"
+                
+            await status_msg.edit_text(response)
+            
+        except Exception as e:
+            logger.error(f"IP command error: {e}")
+            await update.message.reply_text(f"❌ Error analyzing {ip}: {str(e)}")
 
     async def echo(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Echo messages back"""
