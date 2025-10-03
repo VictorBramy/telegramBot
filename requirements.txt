@@ -1,3 +1,7 @@
-# Absolute minimum - emergency stable version
+# Gradual feature restoration - Step 1: Stock Analysis
 python-telegram-bot==21.0
 python-dotenv==1.0.0
+requests==2.31.0
+yfinance==0.2.18
+pandas==2.1.4
+numpy==1.24.3
