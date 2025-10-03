@@ -5,8 +5,7 @@
     ]
   },
   "deploy": {
-    "startCommand": "python bot.py",
-    "healthcheckPath": "/",
+    "startCommand": "python bot_minimal.py",
     "restartPolicyType": "on_failure"
   },
   "environment": {

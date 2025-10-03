@@ -1,3 +1,3 @@
 # Railway Deployment Configuration
 
-web: python bot.py
+web: python bot_minimal.py
