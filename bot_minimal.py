@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 STOCK_AVAILABLE = False
 NETWORK_AVAILABLE = False
 IP_LOCATION_AVAILABLE = False
+VULN_SCANNER_AVAILABLE = False
 
 try:
     from stock_analyzer import stock_analyzer, format_stock_analysis
@@ -43,6 +44,13 @@ try:
     logger.info("IP location tools loaded successfully")
 except Exception as e:
     logger.warning(f"IP location tools not available: {e}")
+
+try:
+    from vulnerability_scanner import VulnerabilityScanner, format_vulnerability_report
+    VULN_SCANNER_AVAILABLE = True
+    logger.info("Vulnerability scanner loaded successfully")
+except Exception as e:
+    logger.warning(f"Vulnerability scanner not available: {e}")
 
 class MinimalBot:
     def __init__(self, token: str):
@@ -562,8 +570,24 @@ class MinimalBot:
 
     async def vuln_scan_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /vulnscan command - Advanced vulnerability scanning"""
-        if not NETWORK_AVAILABLE:
-            await update.message.reply_text("❌ Network tools not available in this deployment")
+        if not VULN_SCANNER_AVAILABLE:
+            # Fallback to basic scan if vulnerability scanner not available
+            if context.args and NETWORK_AVAILABLE:
+                target = context.args[0]
+                await update.message.reply_text(
+                    f"⚠️ **מודול סריקת פגיעויות לא זמין בפריסה זו**\n\n"
+                    f"🔄 **חלופה זמינה:**\n"
+                    f"📍 `/locate {target}` - מידע על IP ומיקום\n"
+                    f"🔍 `/scan {target}` - סריקת פורטים בסיסית\n"
+                    f"🏓 `/ping {target}` - בדיקת זמינות\n\n"
+                    f"💡 **טיפ:** אלו כלים בסיסיים שעדיין יכולים לעזור!",
+                    parse_mode='Markdown'
+                )
+            else:
+                await update.message.reply_text(
+                    "❌ מודול סריקת פגיעויות לא זמין בפריסה זו\n"
+                    "נסה /scan או /locate במקום זאת"
+                )
             return
             
         try:
@@ -590,9 +614,7 @@ class MinimalBot:
             )
             
             try:
-                # Import and run vulnerability scanner
-                from vulnerability_scanner import VulnerabilityScanner, format_vulnerability_report
-                
+                # Use pre-loaded vulnerability scanner
                 scanner = VulnerabilityScanner()
                 results = await scanner.scan_vulnerabilities(target)
                 
@@ -600,15 +622,16 @@ class MinimalBot:
                 report = format_vulnerability_report(results)
                 await processing_msg.edit_text(report, parse_mode='Markdown')
                 
-            except ImportError:
-                await processing_msg.edit_text(
-                    "⚠️ מודול סריקת פגיעויות לא זמין בפריסה זו\n"
-                    f"נסה: /scan {target} במקום זאת"
-                )
             except Exception as scan_error:
+                logger.error(f"Vulnerability scan failed: {scan_error}")
                 await processing_msg.edit_text(
-                    f"❌ שגיאה בסריקה: {str(scan_error)}\n"
-                    f"נסה: /scan {target} במקום זאת"
+                    f"❌ **שגיאה בסריקת פגיעויות**\n\n"
+                    f"השגיאה: `{str(scan_error)}`\n\n"
+                    f"🔄 **חלופות זמינות:**\n"
+                    f"📍 `/locate {target}` - מידע על IP ומיקום\n" 
+                    f"🔍 `/scan {target}` - סריקת פורטים\n"
+                    f"🏓 `/ping {target}` - בדיקת זמינות",
+                    parse_mode='Markdown'
                 )
                 
         except Exception as e:
