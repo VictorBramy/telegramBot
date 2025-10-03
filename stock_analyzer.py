@@ -70,15 +70,20 @@ except ImportError:
     BS4_AVAILABLE = False
 
 # Try to import ML libraries, fall back gracefully if not available
-try:
-    from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
-    from sklearn.preprocessing import StandardScaler, MinMaxScaler
-    from sklearn.model_selection import train_test_split
-    from sklearn.linear_model import Ridge
-    from sklearn.metrics import r2_score
-    ML_AVAILABLE = True
-except ImportError:
-    ML_AVAILABLE = False
+ML_AVAILABLE = False
+if not IS_CLOUD:
+    try:
+        from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+        from sklearn.preprocessing import StandardScaler, MinMaxScaler
+        from sklearn.model_selection import train_test_split
+        from sklearn.linear_model import Ridge
+        from sklearn.metrics import r2_score
+        ML_AVAILABLE = True
+        print("ML libraries loaded!")
+    except ImportError:
+        print("ML libraries not available - using simple predictions only")
+else:
+    print("Cloud mode - ML libraries disabled to save memory")
 
 # Deep Learning imports - skip in cloud to save memory
 if not IS_CLOUD:

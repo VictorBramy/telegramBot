@@ -14,20 +14,23 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 from typing import Dict
 
-# Import IP location functions
-from locate_ip import analyze_single_ip, geoip_ipapi, geoip_ipinfo
+# Import optional modules
+IP_LOCATION_AVAILABLE = False
+NETWORK_TOOLS_AVAILABLE = False
 
-# Import network tools
-from network_tools import (NetworkTools, format_port_scan_result, format_ping_result, 
-                          IPRangeScanner, format_range_scan_result,
-                          export_scan_results_csv, export_scan_results_json, export_scan_results_txt)
-
-# Import stock analysis tools
 try:
-    from stock_analyzer import stock_analyzer, format_stock_analysis
-    STOCK_ANALYSIS_AVAILABLE = True
+    from locate_ip import analyze_single_ip, geoip_ipapi, geoip_ipinfo
+    IP_LOCATION_AVAILABLE = True
 except ImportError:
-    STOCK_ANALYSIS_AVAILABLE = False
+    print("IP location module not available")
+
+try:
+    from network_tools import (NetworkTools, format_port_scan_result, format_ping_result, 
+                              IPRangeScanner, format_range_scan_result,
+                              export_scan_results_csv, export_scan_results_json, export_scan_results_txt)
+    NETWORK_TOOLS_AVAILABLE = True
+except ImportError:
+    print("Network tools module not available")
 
 # Load environment variables
 load_dotenv()
@@ -47,6 +50,17 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("telegram.ext").setLevel(logging.WARNING)
 
 logger = logging.getLogger(__name__)
+
+# Import stock analysis tools with better error handling
+STOCK_ANALYSIS_AVAILABLE = False
+try:
+    from stock_analyzer import stock_analyzer, format_stock_analysis
+    STOCK_ANALYSIS_AVAILABLE = True
+    logger.info("Stock analysis module loaded successfully")
+except ImportError as e:
+    logger.warning(f"Stock analysis not available: {e}")
+except Exception as e:
+    logger.error(f"Failed to load stock analysis: {e}")
 
 # Create separate logger for user activity only
 user_logger = logging.getLogger("user_activity")
@@ -1928,9 +1942,15 @@ def main():
         
     except KeyboardInterrupt:
         logger.info("Bot stopped by user")
+    except ValueError as e:
+        logger.error(f"Configuration error: {e}")
+        print(f"ERROR: {e}")
+        print("Please check your environment variables")
     except Exception as e:
-        logger.error(f"Bot error: {e}")
-        raise
+        logger.error(f"Unexpected bot error: {e}")
+        print(f"CRITICAL ERROR: {e}")
+        import traceback
+        traceback.print_exc()
 
 if __name__ == "__main__":
     main()

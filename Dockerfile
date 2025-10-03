@@ -1,4 +1,4 @@
-# Dockerfile for Telegram Bot - Cloud Optimized
+# Dockerfile for Telegram Bot - Ultra Stable Cloud Version
 FROM python:3.11-slim
 
 # Set working directory
@@ -6,20 +6,23 @@ WORKDIR /app
 
 # Set cloud environment variable
 ENV RAILWAY_ENVIRONMENT=true
+ENV PYTHONUNBUFFERED=1
+ENV PIP_NO_CACHE_DIR=1
 
 # Install system dependencies (minimal)
 RUN apt-get update && apt-get install -y \
-    traceroute \
-    whois \
-    iputils-ping \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
+
+# Upgrade pip first
+RUN pip install --upgrade pip
 
 # Copy requirements first to leverage Docker cache
 COPY requirements.txt .
 
-# Install Python dependencies with timeout and retry
-RUN pip install --no-cache-dir --timeout=300 --retries=3 -r requirements.txt
+# Install Python dependencies with conservative settings
+RUN pip install --no-cache-dir --timeout=600 --retries=5 -r requirements.txt || \
+    pip install --no-cache-dir python-telegram-bot python-dotenv requests
 
 # Copy application code
 COPY . .
