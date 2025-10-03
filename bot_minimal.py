@@ -66,6 +66,7 @@ class MinimalBot:
             self.application.add_handler(CommandHandler("ping", self.ping_command))
             self.application.add_handler(CommandHandler("scan", self.scan_command))
             self.application.add_handler(CommandHandler("rangescan", self.range_scan_command))
+            self.application.add_handler(CommandHandler("vulnscan", self.vuln_scan_command))
             
         # IP location tools (if available)
         if IP_LOCATION_AVAILABLE:
@@ -558,6 +559,61 @@ class MinimalBot:
                 )
             except:
                 await update.message.reply_text(f"❌ שגיאה בסריקת טווח: {str(e)}")
+
+    async def vuln_scan_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /vulnscan command - Advanced vulnerability scanning"""
+        if not NETWORK_AVAILABLE:
+            await update.message.reply_text("❌ Network tools not available in this deployment")
+            return
+            
+        try:
+            user_name = update.effective_user.first_name
+            
+            if not context.args:
+                await update.message.reply_text(
+                    "🔐 **סריקת פגיעויות מתקדמת**\n\n"
+                    "שימוש: `/vulnscan <IP או דומיין>`\n\n"
+                    "דוגמאות:\n"
+                    "• `/vulnscan google.com`\n"
+                    "• `/vulnscan github.com`\n\n"
+                    "⚠️ לשימוש חוקי בלבד!",
+                    parse_mode='Markdown'
+                )
+                return
+                
+            target = context.args[0]
+            
+            # Show processing message
+            processing_msg = await update.message.reply_text(
+                f"🔐 מתחיל סריקת פגיעויות עבור {target}...\n"
+                f"⏳ זמן משוער: 15-30 שניות"
+            )
+            
+            try:
+                # Import and run vulnerability scanner
+                from vulnerability_scanner import VulnerabilityScanner, format_vulnerability_report
+                
+                scanner = VulnerabilityScanner()
+                results = await scanner.scan_vulnerabilities(target)
+                
+                # Format and send results
+                report = format_vulnerability_report(results)
+                await processing_msg.edit_text(report, parse_mode='Markdown')
+                
+            except ImportError:
+                await processing_msg.edit_text(
+                    "⚠️ מודול סריקת פגיעויות לא זמין בפריסה זו\n"
+                    f"נסה: /scan {target} במקום זאת"
+                )
+            except Exception as scan_error:
+                await processing_msg.edit_text(
+                    f"❌ שגיאה בסריקה: {str(scan_error)}\n"
+                    f"נסה: /scan {target} במקום זאת"
+                )
+                
+        except Exception as e:
+            logger.error(f"Vulnerability scan error: {e}")
+            await update.message.reply_text(f"❌ שגיאה: {str(e)}")
 
     async def locate_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /locate command"""
