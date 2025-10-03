@@ -5,8 +5,8 @@ import os
 import logging
 import asyncio
 from dotenv import load_dotenv
-from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters, CallbackQueryHandler
 
 # Load environment variables
 load_dotenv()
@@ -71,6 +71,10 @@ class MinimalBot:
             self.application.add_handler(CommandHandler("locate", self.locate_command))
             self.application.add_handler(CommandHandler("ip", self.ip_command))
         
+        # Menu and callback handlers
+        self.application.add_handler(CommandHandler("menu", self.menu_command))
+        self.application.add_handler(CallbackQueryHandler(self.button_callback))
+        
         # Message handler
         self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.echo))
     
@@ -88,41 +92,119 @@ class MinimalBot:
     async def help_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /help command"""
         try:
-            help_text = (
-                "📚 Available Commands:\n"
-                "/start - Start the bot\n" 
-                "/help - This help message\n"
-                "/status - Bot status\n"
-            )
+            user_name = update.effective_user.first_name
+            user_id = update.effective_user.id
+            username = update.effective_user.username or "ללא שם משתמש"
             
-            if STOCK_AVAILABLE:
-                help_text += "/stock <SYMBOL> - Stock analysis\n"
+            logger.info(f"❓ /help - משתמש: {user_name} (@{username}) | ID: {user_id}")
+            
+            help_text = """
+📋 **פקודות זמינות:**
+
+🔹 **בסיסיות:**
+/start - התחלת השיחה עם הבוט
+/help - הצגת עזרה זו
+/menu - תפריט אינטראקטיבי יפה
+/status - מצב הבוט
+
+🔹 **כלי רשת:**"""
+            
+            if IP_LOCATION_AVAILABLE:
+                help_text += """
+/locate <IP או דומיין> - איתור מיקום IP מפורט
+/ip <IP> - מידע מהיר על IP"""
                 
             if NETWORK_AVAILABLE:
-                help_text += "/ping <HOST> - Ping a host\n"
-                help_text += "/scan <IP> - Scan ports\n"
+                help_text += """
+/scan <IP או דומיין> - בדיקת פורטים פתוחים
+/ping <IP או דומיין> - בדיקת זמינות שרת"""
                 
-            if IP_LOCATION_AVAILABLE:
-                help_text += "/locate <IP> - Find IP location\n"
-                help_text += "/ip <IP> - Get IP details\n"
+            if STOCK_AVAILABLE:
+                help_text += """
+
+🔹 **כלי מניות:**
+/stock <סימול> - ניתוח מניה מפורט"""
+                
+            help_text += """
+
+🔹 **דוגמאות:**
+/locate 8.8.8.8
+/ip 1.1.1.1
+/scan google.com
+/ping github.com
+"""
             
-            help_text += "\nBot is running in cloud mode ☁️"
+            if STOCK_AVAILABLE:
+                help_text += "/stock AAPL\n"
+                
+            help_text += """
+💡 **טיפ:** השתמש ב-/menu לתפריט אינטראקטיבי נוח!
+
+פשוט שלח לי הודעה ואני אענה לך! 💬"""
             
-            await update.message.reply_text(help_text)
+            await update.message.reply_text(help_text, parse_mode='Markdown')
         except Exception as e:
             logger.error(f"Help command error: {e}")
     
     async def status_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /status command"""
         try:
-            await update.message.reply_text(
-                "✅ Bot Status: ONLINE\n"
-                "🌐 Environment: Cloud\n"
-                "🐍 Python: OK\n"
-                "📡 Telegram API: Connected"
-            )
+            status_text = "✅ Bot Status: ONLINE\n🌐 Environment: Cloud\n🐍 Python: OK\n📡 Telegram API: Connected\n\n🔧 **פיצ'רים זמינים:**\n"
+            
+            if STOCK_AVAILABLE:
+                status_text += "📈 ניתוח מניות: ✅\n"
+            else:
+                status_text += "📈 ניתוח מניות: ❌\n"
+                
+            if NETWORK_AVAILABLE:
+                status_text += "🌐 כלי רשת: ✅\n"
+            else:
+                status_text += "🌐 כלי רשת: ❌\n"
+                
+            if IP_LOCATION_AVAILABLE:
+                status_text += "📍 זיהוי מיקום IP: ✅\n"
+            else:
+                status_text += "📍 זיהוי מיקום IP: ❌\n"
+            
+            await update.message.reply_text(status_text, parse_mode='Markdown')
         except Exception as e:
             logger.error(f"Status command error: {e}")
+
+    async def menu_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /menu command with beautiful inline keyboard"""
+        try:
+            user_name = update.effective_user.first_name
+            user_id = update.effective_user.id
+            username = update.effective_user.username or "ללא שם משתמש"
+            
+            logger.info(f"📋 /menu - משתמש: {user_name} (@{username}) | ID: {user_id}")
+            
+            keyboard = []
+            
+            # Add available features to menu
+            if NETWORK_AVAILABLE or IP_LOCATION_AVAILABLE:
+                keyboard.append([InlineKeyboardButton("🔍 כלי רשת", callback_data='network_tools')])
+                
+            if STOCK_AVAILABLE:
+                keyboard.append([InlineKeyboardButton("� ניתוח מניות", callback_data='stock_tools')])
+                
+            keyboard.extend([
+                [InlineKeyboardButton("📊 דוגמאות מהירות", callback_data='quick_examples')],
+                [InlineKeyboardButton("❓ עזרה ומידע", callback_data='help_info')],
+                [InlineKeyboardButton("📞 יצירת קשר", callback_data='contact')]
+            ])
+            
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.message.reply_text(
+                f"🤖 **שלום {user_name}!**\n\n"
+                "בחר אפשרות מהתפריט:\n"
+                "💡 לחץ על הכפתורים למטה לגישה מהירה",
+                reply_markup=reply_markup,
+                parse_mode='Markdown'
+            )
+        except Exception as e:
+            logger.error(f"Menu command error: {e}")
     
     async def stock_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /stock command"""
@@ -366,6 +448,154 @@ class MinimalBot:
         except Exception as e:
             logger.error(f"Bot run error: {e}")
             raise
+
+    async def button_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle inline keyboard button presses"""
+        try:
+            query = update.callback_query
+            await query.answer()
+            
+            user_name = update.effective_user.first_name
+            user_id = update.effective_user.id
+            username = update.effective_user.username or "ללא שם משתמש"
+            
+            logger.info(f"🔘 כפתור נלחץ: '{query.data}' - משתמש: {user_name} (@{username}) | ID: {user_id}")
+
+            # Main menu options
+            if query.data == 'network_tools':
+                keyboard = []
+                if IP_LOCATION_AVAILABLE:
+                    keyboard.extend([
+                        [InlineKeyboardButton("📍 איתור IP/דומיין", callback_data='locate_demo')],
+                        [InlineKeyboardButton("🗺️ מידע IP מהיר", callback_data='ip_demo')]
+                    ])
+                if NETWORK_AVAILABLE:
+                    keyboard.extend([
+                        [InlineKeyboardButton("🔍 סריקת פורטים", callback_data='scan_demo')],
+                        [InlineKeyboardButton("🏓 בדיקת Ping", callback_data='ping_demo')]
+                    ])
+                keyboard.append([InlineKeyboardButton("🔙 חזרה לתפריט ראשי", callback_data='main_menu')])
+                
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                await query.edit_message_text(
+                    "🔍 **כלי רשת**\n\n"
+                    "בחר כלי לשימוש:",
+                    reply_markup=reply_markup,
+                    parse_mode='Markdown'
+                )
+                
+            elif query.data == 'stock_tools' and STOCK_AVAILABLE:
+                keyboard = [
+                    [InlineKeyboardButton("📈 ניתוח מניה", callback_data='stock_demo')],
+                    [InlineKeyboardButton("💡 דוגמאות מניות", callback_data='stock_examples')],
+                    [InlineKeyboardButton("🔙 חזרה לתפריט ראשי", callback_data='main_menu')]
+                ]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                await query.edit_message_text(
+                    "📈 **ניתוח מניות**\n\n"
+                    "בחר אפשרות:",
+                    reply_markup=reply_markup,
+                    parse_mode='Markdown'
+                )
+                
+            # Back to main menu
+            elif query.data == 'main_menu':
+                keyboard = []
+                
+                if NETWORK_AVAILABLE or IP_LOCATION_AVAILABLE:
+                    keyboard.append([InlineKeyboardButton("🔍 כלי רשת", callback_data='network_tools')])
+                    
+                if STOCK_AVAILABLE:
+                    keyboard.append([InlineKeyboardButton("📈 ניתוח מניות", callback_data='stock_tools')])
+                    
+                keyboard.extend([
+                    [InlineKeyboardButton("📊 דוגמאות מהירות", callback_data='quick_examples')],
+                    [InlineKeyboardButton("❓ עזרה ומידע", callback_data='help_info')],
+                    [InlineKeyboardButton("📞 יצירת קשר", callback_data='contact')]
+                ])
+                
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                await query.edit_message_text(
+                    f"🤖 **שלום {user_name}!**\n\n"
+                    "בחר אפשרות מהתפריט:\n"
+                    "💡 לחץ על הכפתורים למטה לגישה מהירה",
+                    reply_markup=reply_markup,
+                    parse_mode='Markdown'
+                )
+                
+            # Demo buttons - show example commands
+            elif query.data == 'locate_demo':
+                await query.edit_message_text(
+                    "📍 **איתור IP/דומיין**\n\n"
+                    "דוגמאות שימוש:\n"
+                    "`/locate 8.8.8.8`\n"
+                    "`/locate google.com`\n"
+                    "`/locate 1.1.1.1`\n\n"
+                    "פשוט העתק אחת מהפקודות למעלה! 📋",
+                    parse_mode='Markdown'
+                )
+                
+            elif query.data == 'ip_demo':
+                await query.edit_message_text(
+                    "🗺️ **מידע IP מהיר**\n\n"
+                    "דוגמאות שימוש:\n"
+                    "`/ip 8.8.8.8`\n"
+                    "`/ip 1.1.1.1`\n"
+                    "`/ip 208.67.222.222`\n\n"
+                    "פשוט העתק אחת מהפקודות למעלה! 📋",
+                    parse_mode='Markdown'
+                )
+                
+            elif query.data == 'scan_demo':
+                await query.edit_message_text(
+                    "🔍 **סריקת פורטים**\n\n"
+                    "דוגמאות שימוש:\n"
+                    "`/scan google.com`\n"
+                    "`/scan 192.168.1.1`\n\n"
+                    "פשוט העתק אחת מהפקודות למעלה! 📋",
+                    parse_mode='Markdown'
+                )
+                
+            elif query.data == 'ping_demo':
+                await query.edit_message_text(
+                    "🏓 **בדיקת Ping**\n\n"
+                    "דוגמאות שימוש:\n"
+                    "`/ping google.com`\n"
+                    "`/ping github.com`\n"
+                    "`/ping 8.8.8.8`\n\n"
+                    "פשוט העתק אחת מהפקודות למעלה! 📋",
+                    parse_mode='Markdown'
+                )
+                
+            elif query.data == 'stock_demo' and STOCK_AVAILABLE:
+                await query.edit_message_text(
+                    "📈 **ניתוח מניה**\n\n"
+                    "דוגמאות שימוש:\n"
+                    "`/stock AAPL`\n"
+                    "`/stock MSFT`\n"
+                    "`/stock GOOGL`\n\n"
+                    "פשוט העתק אחת מהפקודות למעלה! 📋",
+                    parse_mode='Markdown'
+                )
+                
+            elif query.data == 'contact':
+                await query.edit_message_text(
+                    "📞 **יצירת קשר**\n\n"
+                    "🤖 הבוט הזה נוצר עבור בדיקות רשת ואבטחה\n"
+                    "🛡️ השתמש באחריות ובהתאם לחוק\n"
+                    "⚖️ אין להשתמש לפעילות לא חוקית\n\n"
+                    "💬 פשוט שלח הודעה לבוט לשימוש רגיל!"
+                )
+                
+            # Fallback for undefined buttons
+            else:
+                await query.edit_message_text(
+                    f"🔧 הפיצ'ר '{query.data}' עדיין בפיתוח...\n\n"
+                    "השתמש ב-/help לרשימת פקודות זמינות!"
+                )
+                
+        except Exception as e:
+            logger.error(f"Button callback error: {e}")
 
 def main():
     """Main function"""
