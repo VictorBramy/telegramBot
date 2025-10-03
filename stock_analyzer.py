@@ -6,6 +6,7 @@ Provides comprehensive stock analysis, technical indicators, and AI predictions
 import yfinance as yf
 import pandas as pd
 import numpy as np
+import os
 from datetime import datetime, timedelta
 import requests
 from typing import Dict, List, Optional, Tuple
@@ -13,14 +14,25 @@ import asyncio
 import warnings
 warnings.filterwarnings('ignore')
 
+# Cloud environment detection
+CLOUD_ENVIRONMENT = os.getenv('RAILWAY_ENVIRONMENT') or os.getenv('HEROKU_APP_NAME') or os.getenv('RENDER')
+IS_CLOUD = CLOUD_ENVIRONMENT is not None
+
+if IS_CLOUD:
+    print("Cloud environment detected - using lightweight configuration")
+else:
+    print("Local environment - using full features")
+
 # Import learning system
 try:
     from model_memory import model_memory
     MEMORY_AVAILABLE = True
-    print("Learning Memory System loaded!")
+    if not IS_CLOUD:
+        print("Learning Memory System loaded!")
 except ImportError:
     MEMORY_AVAILABLE = False
-    print("Learning Memory System not available")
+    if not IS_CLOUD:
+        print("Learning Memory System not available")
 
 # Try to import alternative finance APIs
 GOOGLE_FINANCE_AVAILABLE = False
@@ -68,22 +80,26 @@ try:
 except ImportError:
     ML_AVAILABLE = False
 
-# Deep Learning imports
-try:
-    import tensorflow as tf
-    from tensorflow.keras.models import Sequential
-    from tensorflow.keras.layers import LSTM, Dense, Dropout
-    from tensorflow.keras.optimizers import Adam
-    from tensorflow.keras.callbacks import EarlyStopping
-    tf.config.experimental.set_memory_growth(tf.config.experimental.list_physical_devices('GPU')[0], True) if tf.config.experimental.list_physical_devices('GPU') else None
-    DEEP_LEARNING_AVAILABLE = True
-    print("Deep Learning (LSTM) available!")
-except ImportError:
+# Deep Learning imports - skip in cloud to save memory
+if not IS_CLOUD:
+    try:
+        import tensorflow as tf
+        from tensorflow.keras.models import Sequential
+        from tensorflow.keras.layers import LSTM, Dense, Dropout
+        from tensorflow.keras.optimizers import Adam
+        from tensorflow.keras.callbacks import EarlyStopping
+        tf.config.experimental.set_memory_growth(tf.config.experimental.list_physical_devices('GPU')[0], True) if tf.config.experimental.list_physical_devices('GPU') else None
+        DEEP_LEARNING_AVAILABLE = True
+        print("Deep Learning (LSTM) available!")
+    except ImportError:
+        DEEP_LEARNING_AVAILABLE = False
+        print("TensorFlow not available - LSTM disabled")
+    except Exception as e:
+        DEEP_LEARNING_AVAILABLE = False
+        print(f"Deep Learning setup issue: {e}")
+else:
     DEEP_LEARNING_AVAILABLE = False
-    print("TensorFlow not available - LSTM disabled")
-except Exception as e:
-    DEEP_LEARNING_AVAILABLE = False
-    print(f"Deep Learning setup issue: {e}")
+    print("Cloud mode - LSTM disabled to save memory")
 
 try:
     import talib

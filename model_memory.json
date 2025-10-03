@@ -21,6 +21,17 @@
       "verified": false,
       "actual_price": null,
       "accuracy": null
+    },
+    {
+      "symbol": "AAPL",
+      "predicted_price": 258.72,
+      "confidence": 55,
+      "method": "ML Ensemble",
+      "prediction_date": "2025-10-03T18:37:31.890893",
+      "target_date": "2025-10-04T18:37:31.890898",
+      "verified": false,
+      "actual_price": null,
+      "accuracy": null
     }
   ],
   "model_performance": {},
@@ -41,12 +52,20 @@
           "recent_trend": 0.72,
           "position_in_range": 0.966
         }
+      },
+      {
+        "date": "2025-10-03T18:37:31.761360",
+        "patterns": {
+          "avg_volatility": 1.53,
+          "recent_trend": 0.98,
+          "position_in_range": 0.986
+        }
       }
     ]
   },
   "best_settings": {},
   "learning_stats": {
-    "total_predictions": 2,
+    "total_predictions": 3,
     "correct_predictions": 0,
     "accuracy_trend": []
   }
