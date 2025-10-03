@@ -65,6 +65,7 @@ class MinimalBot:
         if NETWORK_AVAILABLE:
             self.application.add_handler(CommandHandler("ping", self.ping_command))
             self.application.add_handler(CommandHandler("scan", self.scan_command))
+            self.application.add_handler(CommandHandler("rangescan", self.range_scan_command))
             
         # IP location tools (if available)
         if IP_LOCATION_AVAILABLE:
@@ -116,7 +117,8 @@ class MinimalBot:
                 
             if NETWORK_AVAILABLE:
                 help_text += """
-/scan <IP או דומיין> - בדיקת פורטים פתוחים
+/scan <IP או דומיין> [סוג] - בדיקת פורטים פתוחים
+/rangescan <טווח IP> <פורט> - סריקת טווח IP לפורט ספציפי
 /ping <IP או דומיין> - בדיקת זמינות שרת"""
                 
             if STOCK_AVAILABLE:
@@ -130,7 +132,8 @@ class MinimalBot:
 🔹 **דוגמאות:**
 /locate 8.8.8.8
 /ip 1.1.1.1
-/scan google.com
+/scan google.com quick
+/rangescan 192.168.1.0/24 22
 /ping github.com
 """
             
@@ -284,49 +287,277 @@ class MinimalBot:
             await update.message.reply_text(f"❌ Error pinging {host}: {str(e)}")
 
     async def scan_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle /scan command"""
+        """Handle /scan command - Advanced port scanning with multiple types"""
         if not NETWORK_AVAILABLE:
             await update.message.reply_text("❌ Network tools not available in this deployment")
             return
             
         try:
+            user_name = update.effective_user.first_name
+            user_id = update.effective_user.id
+            username = update.effective_user.username or "ללא שם משתמש"
+            
             if not context.args:
+                logger.info(f"🔍 /scan (ללא פרמטר) - משתמש: {user_name} (@{username}) | ID: {user_id}")
                 await update.message.reply_text(
-                    "🔍 **Port Scanner**\n\n"
-                    "Usage: `/scan <IP>`\n\n"
-                    "Examples:\n"
-                    "• `/scan 192.168.1.1`\n"
-                    "• `/scan google.com`\n\n"
-                    "Scans common ports (21,22,23,25,53,80,110,443,993,995)"
+                    "🔍 **סריקת פורטים מתקדמת**\n\n"
+                    "**שימוש:** `/scan <IP או דומיין> [סוג]`\n\n"
+                    "🔹 **דוגמאות:**\n"
+                    "• `/scan google.com`\n"
+                    "• `/scan 192.168.1.1 quick`\n"
+                    "• `/scan github.com top100`\n"
+                    "• `/scan mysite.com web`\n\n"
+                    "🔹 **סוגי סריקה:**\n"
+                    "• `quick` - 13 פורטים חשובים (מהיר)\n"
+                    "• `common` - 19 פורטים נפוצים (ברירת מחדל)\n"
+                    "• `top100` - 100 הפורטים הנפוצים ביותר\n"
+                    "• `web` - פורטי שירותי אינטרנט\n"
+                    "• `full` - כל הפורטים 1-65535 (איטי מאוד!)\n\n"
+                    "⚠️ **לשימוש חוקי בלבד!**",
+                    parse_mode='Markdown'
                 )
                 return
                 
             target = context.args[0]
-            status_msg = await update.message.reply_text(f"🔍 Scanning {target}...")
+            scan_type = context.args[1] if len(context.args) > 1 else "common"
             
-            # Perform port scan
+            logger.info(f"🔍 /scan '{target}' ({scan_type}) - משתמש: {user_name} (@{username}) | ID: {user_id}")
+            
+            # Import network tools with advanced functions
+            from network_tools import NetworkTools, format_port_scan_result
             network_tools = NetworkTools()
-            common_ports = [21, 22, 23, 25, 53, 80, 110, 443, 993, 995]
-            results = await network_tools.scan_ports(target, common_ports, timeout=3)
             
-            if results:
-                response = f"🔍 **Port Scan Results - {target}**\n\n"
-                open_ports = [r for r in results if r['status'] == 'Open']
-                
-                if open_ports:
-                    response += f"🟢 **Open Ports:**\n"
-                    for port in open_ports[:10]:  # Limit to 10 ports
-                        response += f"• {port['port']}/{port['protocol']} - {port['service']}\n"
-                else:
-                    response += "🔒 No open ports found"
-            else:
-                response = f"❌ Scan failed for {target}"
-                
-            await status_msg.edit_text(response)
+            # Get ports for scan type
+            ports = network_tools.get_port_ranges(scan_type)
+            ports_count = len(ports)
+            
+            # Time estimates
+            time_estimates = {
+                "quick": "3-5 שניות",
+                "common": "5-8 שניות", 
+                "top100": "15-30 שניות",
+                "web": "3-5 שניות",
+                "full": "5-15 דקות ⚠️"
+            }
+            estimated_time = time_estimates.get(scan_type, "מספר שניות")
+            
+            # Show enhanced processing message
+            processing_msg = await update.message.reply_text(
+                f"🔍 **סורק פורטים עבור:** `{target}`\n\n"
+                f"📊 **סוג סריקה:** {scan_type.upper()}\n"
+                f"🎯 **פורטים לסריקה:** {ports_count:,}\n"
+                f"⏱️ **זמן משוער:** {estimated_time}\n\n"
+                f"⏳ מתחיל סריקה... אנא המתן",
+                parse_mode='Markdown'
+            )
+            
+            # Perform advanced scan
+            result = await network_tools.scan_ports_async(target, ports)
+            
+            # Format results with advanced formatting
+            result_text = format_port_scan_result(result)
+            
+            # Create enhanced inline keyboard
+            keyboard = [
+                [InlineKeyboardButton("🔄 סרוק מחדש", callback_data='scan_demo')],
+                [InlineKeyboardButton("🏓 Ping Test", callback_data='ping_demo')],
+                [InlineKeyboardButton("📍 איתור IP", callback_data='locate_demo')],
+                [InlineKeyboardButton("🔙 תפריט ראשי", callback_data='main_menu')]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await processing_msg.edit_text(
+                result_text,
+                parse_mode='Markdown',
+                reply_markup=reply_markup
+            )
             
         except Exception as e:
-            logger.error(f"Scan command error: {e}")
-            await update.message.reply_text(f"❌ Error scanning {target}: {str(e)}")
+            logger.error(f"Advanced scan command error: {e}")
+            # Fallback to basic scan if advanced fails
+            try:
+                target = context.args[0] if context.args else "unknown"
+                await update.message.reply_text(
+                    f"⚠️ הסריקה המתקדמת נכשלה עבור {target}\n\n"
+                    f"🔄 נסה שוב מאוחר יותר או עם target אחר.\n\n"
+                    f"📝 וודא שהפורמט נכון:\n"
+                    f"`/scan {target} [quick/common/top100/web]`",
+                    parse_mode='Markdown'
+                )
+            except:
+                await update.message.reply_text(f"❌ שגיאה בסריקת פורטים: {str(e)}")
+
+    async def range_scan_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /rangescan command for IP range scanning"""
+        if not NETWORK_AVAILABLE:
+            await update.message.reply_text("❌ Network tools not available in this deployment")
+            return
+            
+        try:
+            user_name = update.effective_user.first_name
+            user_id = update.effective_user.id
+            username = update.effective_user.username or "ללא שם משתמש"
+            
+            # Check if range and port were provided
+            if len(context.args) < 2:
+                logger.info(f"🎯 /rangescan (פרמטרים חסרים) - משתמש: {user_name} (@{username}) | ID: {user_id}")
+                await update.message.reply_text(
+                    "🎯 **סריקת טווח IP מתקדמת**\n\n"
+                    "**שימוש:** `/rangescan <טווח IP> <פורט>`\n\n"
+                    "🔹 **פורמטים נתמכים:**\n"
+                    "• **CIDR:** `/rangescan 192.168.1.0/24 22`\n"
+                    "• **טווח:** `/rangescan 213.0.0.0-213.0.0.255 5900`\n"
+                    "• **IP יחיד:** `/rangescan 8.8.8.8 80`\n\n"
+                    "🚀 **דוגמאות נפוצות:**\n"
+                    "• SSH: `/rangescan 192.168.1.0/24 22`\n"
+                    "• VNC: `/rangescan 10.0.0.0/16 5900`\n"
+                    "• Web: `/rangescan 172.16.0.0/24 80`\n\n"
+                    "⚠️ **הערה:** טווחים גדולים יכולים לקחת זמן רב!\n"
+                    "💡 **טיפ:** התחל עם טווח קטן כמו /24\n"
+                    "🛡️ **לשימוש חוקי בלבד!**",
+                    parse_mode='Markdown'
+                )
+                return
+                
+            ip_range = context.args[0]
+            try:
+                port = int(context.args[1])
+            except ValueError:
+                await update.message.reply_text(
+                    "❌ **פורט לא תקין**\n\n"
+                    "הפורט חייב להיות מספר בין 1-65535\n\n"
+                    "דוגמה: `/rangescan 192.168.1.0/24 22`",
+                    parse_mode='Markdown'
+                )
+                return
+                
+            if not (1 <= port <= 65535):
+                await update.message.reply_text(
+                    "❌ **פורט מחוץ לטווח**\n\n"
+                    "הפורט חייב להיות בין 1-65535\n\n"
+                    f"הפורט שלך: `{port}`",
+                    parse_mode='Markdown'
+                )
+                return
+                
+            logger.info(f"🎯 /rangescan '{ip_range}' פורט {port} - משתמש: {user_name} (@{username}) | ID: {user_id}")
+            
+            # Import advanced range scanning
+            from network_tools import RangeScanner, format_range_scan_result
+            range_scanner = RangeScanner()
+            
+            # Parse range to estimate size
+            try:
+                test_ips = range_scanner.parse_ip_range(ip_range)
+                estimated_count = len(test_ips)
+                
+                # Estimate time
+                if estimated_count <= 256:
+                    time_est = "10-30 שניות"
+                elif estimated_count <= 1000:
+                    time_est = "30-60 שניות"
+                elif estimated_count <= 10000:
+                    time_est = "2-5 דקות"
+                elif estimated_count <= 100000:
+                    time_est = "10-20 דקות"
+                else:
+                    time_est = "20+ דקות"
+                    
+                # Warning for large scans
+                if estimated_count > 10000:
+                    await update.message.reply_text(
+                        f"⚠️ **אזהרה: סריקה גדולה מאוד**\n\n"
+                        f"📊 **טווח:** `{ip_range}`\n"
+                        f"🎯 **פורט:** `{port}`\n"
+                        f"📈 **מוערך:** ~`{estimated_count:,}` IPs\n"
+                        f"⏱️ **זמן משוער:** {time_est}\n\n"
+                        f"🚨 **זה יכול להעמיס על הרשת!**\n"
+                        f"🛡️ **השתמש רק ברשתות מורשות**\n\n"
+                        f"נסה טווח קטן יותר כמו /24 או פחות.",
+                        parse_mode='Markdown'
+                    )
+                    return
+                    
+            except Exception as e:
+                await update.message.reply_text(
+                    f"❌ **טווח IP לא תקין**\n\n"
+                    f"שגיאה: `{str(e)}`\n\n"
+                    f"🔹 **פורמטים נכונים:**\n"
+                    f"• `192.168.1.0/24`\n"
+                    f"• `10.0.0.1-10.0.0.254`\n"
+                    f"• `8.8.8.8`",
+                    parse_mode='Markdown'
+                )
+                return
+                
+            # Show processing message
+            processing_msg = await update.message.reply_text(
+                f"🎯 **מתחיל סריקת טווח מתקדמת**\n\n"
+                f"📍 **טווח:** `{ip_range}`\n"
+                f"🔍 **פורט:** `{port}`\n"
+                f"📊 **מוערך:** ~`{estimated_count:,}` IPs\n"
+                f"⏱️ **זמן משוער:** {time_est}\n\n"
+                f"⚡ **מתחיל threads...**\n"
+                f"⏳ **התחלת סריקה...**",
+                parse_mode='Markdown'
+            )
+            
+            # Progress callback function
+            async def progress_callback(scanned, total, found):
+                progress_percent = (scanned / total) * 100
+                bar_length = 15
+                filled = int(bar_length * scanned / total)
+                bar = "█" * filled + "░" * (bar_length - filled)
+                
+                try:
+                    await processing_msg.edit_text(
+                        f"🎯 **סורק טווח IP - {progress_percent:.1f}%**\n\n"
+                        f"📍 **טווח:** `{ip_range}`\n"
+                        f"🔍 **פורט:** `{port}`\n\n"
+                        f"📊 **התקדמות:** `{scanned:,}/{total:,}`\n"
+                        f"🟢 **נמצאו:** `{found}` פורטים פתוחים\n\n"
+                        f"**[{bar}] {progress_percent:.1f}%**\n\n"
+                        f"⚡ ממשיך בסריקה...",
+                        parse_mode='Markdown'
+                    )
+                except:
+                    pass  # Ignore edit errors during progress updates
+                    
+            # Perform the range scan
+            result = await range_scanner.scan_range_async(
+                ip_range, port, progress_callback
+            )
+            
+            # Format results with advanced formatting
+            result_text = format_range_scan_result(result)
+            
+            # Create enhanced inline keyboard
+            keyboard = [
+                [InlineKeyboardButton("🔄 סרוק טווח אחר", callback_data='scan_demo')],
+                [InlineKeyboardButton("🔍 סריקת פורטים רגילה", callback_data='scan_demo')],
+                [InlineKeyboardButton("📍 איתור IP", callback_data='locate_demo')],
+                [InlineKeyboardButton("🔙 תפריט ראשי", callback_data='main_menu')]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await processing_msg.edit_text(
+                result_text,
+                parse_mode='Markdown',
+                reply_markup=reply_markup
+            )
+            
+        except Exception as e:
+            logger.error(f"Range scan command error: {e}")
+            try:
+                await update.message.reply_text(
+                    f"❌ **שגיאה בסריקת טווח**\n\n"
+                    f"השגיאה: `{str(e)}`\n\n"
+                    f"🔄 נסה שוב עם פורמט נכון:\n"
+                    f"`/rangescan 192.168.1.0/24 22`",
+                    parse_mode='Markdown'
+                )
+            except:
+                await update.message.reply_text(f"❌ שגיאה בסריקת טווח: {str(e)}")
 
     async def locate_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /locate command"""
@@ -472,7 +703,8 @@ class MinimalBot:
                 if NETWORK_AVAILABLE:
                     keyboard.extend([
                         [InlineKeyboardButton("🔍 סריקת פורטים", callback_data='scan_demo')],
-                        [InlineKeyboardButton("🏓 בדיקת Ping", callback_data='ping_demo')]
+                        [InlineKeyboardButton("� סריקת טווח IP", callback_data='rangescan_demo')],
+                        [InlineKeyboardButton("�🏓 בדיקת Ping", callback_data='ping_demo')]
                     ])
                 keyboard.append([InlineKeyboardButton("🔙 חזרה לתפריט ראשי", callback_data='main_menu')])
                 
@@ -564,6 +796,21 @@ class MinimalBot:
                     "`/ping github.com`\n"
                     "`/ping 8.8.8.8`\n\n"
                     "פשוט העתק אחת מהפקודות למעלה! 📋",
+                    parse_mode='Markdown'
+                )
+                
+            elif query.data == 'rangescan_demo':
+                await query.edit_message_text(
+                    "🎯 **סריקת טווח IP מתקדמת**\n\n"
+                    "דוגמאות שימוש:\n"
+                    "`/rangescan 192.168.1.0/24 22`\n"
+                    "`/rangescan 10.0.0.1-10.0.0.50 80`\n"
+                    "`/rangescan 172.16.1.0/24 5900`\n\n"
+                    "פשוט העתק אחת מהפקודות למעלה! 📋\n\n"
+                    "💡 **טיפים:**\n"
+                    "• SSH: פורט 22\n"
+                    "• Web: פורט 80/443\n"
+                    "• VNC: פורט 5900",
                     parse_mode='Markdown'
                 )
                 
