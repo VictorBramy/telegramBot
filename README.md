@@ -131,18 +131,43 @@ telegram-bot/
 
 ## פקודות זמינות
 
+### 🔧 פקודות בסיס
 - `/start` - התחלת השיחה עם הבוט
 - `/help` - הצגת עזרה
 - `/menu` - תפריט אינטראקטיבי
+- `/status` - סטטוס מודולים
+
+### 🌐 כלי רשת ואבטחה  
 - `/locate <IP או דומיין>` - איתור מיקום גאוגרפי
+- `/ping <host>` - בדיקת זמינות
+- `/scan <target> [type]` - סריקת פורטים
+- `/rangescan <range> <port>` - סריקת טווח IP
 
-### דוגמאות לפקודת איתור:
+### 💥 ניתוח אבטחה מתקדם
+- `/exploitscan <target>` - **חדש!** ניתוח exploits מקיף עם תוכנית ניצול
+- `/vulnscan <target>` - סריקת פגיעויות בסיסית
+- `/vulninfo <type>` - מידע מפורט על סוגי פגיעויות
+- `/exploitinfo <service>` - מידע על exploits לשירות ספציפי
 
+### 📊 ניתוח מניות (אם זמין)
+- `/stock <symbol>` - ניתוח מניה מתקדם
+
+### דוגמאות שימוש:
+
+#### בדיקות רשת בסיסיות:
 ```
 /locate 8.8.8.8
-/locate google.com
-/locate facebook.com
-/locate 1.1.1.1
+/ping google.com
+/scan github.com quick
+/rangescan 192.168.1.0/24 22
+```
+
+#### ניתוח אבטחה מתקדם:
+```
+/exploitscan example.com     # ניתוח מקיף
+/vulnscan target.com         # בדיקת פגיעויות
+/vulninfo ssl               # מידע על SSL issues  
+/exploitinfo apache         # Apache exploits
 ```
 
 ## התאמה אישית

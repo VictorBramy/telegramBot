@@ -4,6 +4,7 @@ Emergency Minimal Bot - Cloud Stable Version
 import os
 import logging
 import asyncio
+from typing import Dict, Any
 from dotenv import load_dotenv
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, ContextTypes, filters, CallbackQueryHandler
@@ -75,6 +76,9 @@ class MinimalBot:
             self.application.add_handler(CommandHandler("scan", self.scan_command))
             self.application.add_handler(CommandHandler("rangescan", self.range_scan_command))
             self.application.add_handler(CommandHandler("vulnscan", self.vuln_scan_command))
+            self.application.add_handler(CommandHandler("vulninfo", self.vulninfo_command))
+            self.application.add_handler(CommandHandler("exploitinfo", self.exploitinfo_command))
+            self.application.add_handler(CommandHandler("exploitscan", self.exploitscan_command))
             
         # IP location tools (if available)
         if IP_LOCATION_AVAILABLE:
@@ -130,6 +134,13 @@ class MinimalBot:
 /rangescan <טווח IP> <פורט> - סריקת טווח IP לפורט ספציפי
 /ping <IP או דומיין> - בדיקת זמינות שרת"""
                 
+            if VULN_SCANNER_AVAILABLE:
+                help_text += """
+/vulnscan <IP או דומיין> - בדיקת פגיעויות אבטחה
+/exploitscan <יעד> - ניתוח exploits מתקדם עם תוכנית ניצול
+/vulninfo <סוג פגיעות> - מידע מפורט על פגיעויות
+/exploitinfo <שירות> - מידע על exploits ידועים"""
+                
             if STOCK_AVAILABLE:
                 help_text += """
 
@@ -143,7 +154,17 @@ class MinimalBot:
 /ip 1.1.1.1
 /scan google.com quick
 /rangescan 192.168.1.0/24 22
-/ping github.com
+/ping github.com"""
+                
+            if VULN_SCANNER_AVAILABLE:
+                help_text += """
+/vulnscan google.com
+/exploitscan example.com
+/vulninfo ssl
+/exploitinfo apache
+"""
+            else:
+                help_text += """
 """
             
             if STOCK_AVAILABLE:
@@ -567,6 +588,357 @@ class MinimalBot:
                 )
             except:
                 await update.message.reply_text(f"❌ שגיאה בסריקת טווח: {str(e)}")
+
+    async def exploitscan_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /exploitscan command for comprehensive exploit analysis"""
+        if not VULN_SCANNER_AVAILABLE:
+            await update.message.reply_text("❌ מודול ניתוח exploits לא זמין בפריסה זו")
+            return
+            
+        try:
+            user_name = update.effective_user.first_name
+            user_id = update.effective_user.id
+            username = update.effective_user.username or "ללא שם משתמש"
+            
+            logger.info(f"💥 /exploitscan - משתמש: {user_name} (@{username}) | ID: {user_id}")
+            
+            if not context.args:
+                await update.message.reply_text(
+                    "💥 **ניתוח Exploits מתקדם**\n\n"
+                    "**שימוש:** `/exploitscan <יעד>`\n\n"
+                    "🎯 **מה הבוט יעשה:**\n"
+                    "• זיהוי שירותים וגרסאות מדויק\n"
+                    "• חיפוש exploits ספציפיים ב-Exploit-DB\n"
+                    "• תוכנית ניצול מפורטת\n"
+                    "• הערכת רמת סיכון\n\n"
+                    "📖 **דוגמאות:**\n"
+                    "`/exploitscan google.com`\n"
+                    "`/exploitscan 192.168.1.1`\n\n"
+                    "⚠️ **אזהרה:** למטרות חינוך והגנה בלבד!",
+                    parse_mode='Markdown'
+                )
+                return
+                
+            target = context.args[0]
+            
+            # Send "analyzing" message
+            status_msg = await update.message.reply_text(
+                f"💥 **מנתח exploits עבור:** `{target}`\n\n"
+                "🔍 זיהוי שירותים...\n"
+                "🎯 חיפוש exploits...\n"
+                "📋 יצירת תוכנית ניצול...\n\n"
+                "⏳ זה יכול לקחת דקה...",
+                parse_mode='Markdown'
+            )
+            
+            # Import and run exploit analysis
+            from vulnerability_scanner import VulnerabilityScanner
+            scanner = VulnerabilityScanner()
+            
+            # Perform comprehensive exploit analysis
+            analysis_result = await scanner.analyze_website_exploits(target)
+            
+            # Format results
+            if 'error' in analysis_result:
+                await status_msg.edit_text(
+                    f"❌ **שגיאה בניתוח:** {analysis_result['error']}\n\n"
+                    "נסה יעד אחר או בדוק את החיבור לאינטרנט",
+                    parse_mode='Markdown'
+                )
+                return
+            
+            response = await self._format_exploit_analysis(analysis_result)
+            
+            # Split long messages
+            if len(response) > 4000:
+                parts = [response[i:i+4000] for i in range(0, len(response), 4000)]
+                await status_msg.edit_text(parts[0], parse_mode='Markdown')
+                for part in parts[1:]:
+                    await update.message.reply_text(part, parse_mode='Markdown')
+            else:
+                await status_msg.edit_text(response, parse_mode='Markdown')
+                
+        except Exception as e:
+            logger.error(f"Exploitscan command error: {e}")
+            await update.message.reply_text(f"❌ שגיאה בניתוח exploits: {str(e)}")
+
+    async def _format_exploit_analysis(self, analysis: Dict[str, Any]) -> str:
+        """Format exploit analysis results for display"""
+        target = analysis.get('target', 'Unknown')
+        services = analysis.get('detected_services', [])
+        exploits = analysis.get('potential_exploits', [])
+        plan = analysis.get('exploitation_plan', [])
+        severity_score = analysis.get('severity_score', 100)
+        
+        # Determine risk level
+        if severity_score <= 20:
+            risk_level = "🔴 **סיכון קריטי**"
+            risk_emoji = "🚨"
+        elif severity_score <= 40:
+            risk_level = "🟠 **סיכון גבוה**"  
+            risk_emoji = "⚠️"
+        elif severity_score <= 70:
+            risk_level = "🟡 **סיכון בינוני**"
+            risk_emoji = "⚡"
+        else:
+            risk_level = "🟢 **סיכון נמוך**"
+            risk_emoji = "✅"
+        
+        response = f"💥 **דוח ניתוח Exploits - {target}**\n\n"
+        response += f"{risk_emoji} {risk_level}\n"
+        response += f"🎯 **ציון אבטחה:** {severity_score}/100\n\n"
+        
+        # Detected services
+        if services:
+            response += f"🔍 **שירותים שזוהו ({len(services)}):**\n"
+            for service in services[:3]:  # Show top 3 services
+                if 'server_parsed' in service and 'software' in service['server_parsed']:
+                    server_info = service['server_parsed']
+                    software = server_info.get('software', 'Unknown')
+                    version = server_info.get('version', 'Unknown')
+                    response += f"• {software} {version} (Port {service.get('port', 'N/A')})\n"
+                elif 'technologies' in service:
+                    for tech in service['technologies'][:2]:
+                        tech_name = tech.get('name', 'Unknown')
+                        tech_version = tech.get('version', '')
+                        response += f"• {tech_name} {tech_version}\n"
+                else:
+                    service_name = service.get('service', 'Unknown')
+                    port = service.get('port', 'N/A')
+                    response += f"• {service_name} (Port {port})\n"
+            response += "\n"
+        
+        # Found exploits
+        if exploits:
+            response += f"💀 **EXPLOITS זמינים ({len(exploits)}):**\n\n"
+            
+            # Show critical exploits first
+            critical_exploits = [e for e in exploits if e.get('severity') == 'Critical']
+            high_exploits = [e for e in exploits if e.get('severity') == 'High']
+            
+            for exploit in critical_exploits[:2]:
+                response += f"🔴 **CRITICAL: {exploit.get('title', 'Unknown')}**\n"
+                if 'cve' in exploit:
+                    response += f"🏷️ CVE: `{exploit['cve']}`\n"
+                response += f"📝 {exploit.get('description', '')}\n"
+                if 'exploitation' in exploit:
+                    exp = exploit['exploitation']
+                    response += f"⚔️ כלים: {', '.join(exp.get('tools', [])[:3])}\n"
+                    response += f"💥 השפעה: {exp.get('impact', 'Unknown')}\n"
+                response += "\n"
+                
+            for exploit in high_exploits[:1]:
+                response += f"🟠 **HIGH: {exploit.get('title', 'Unknown')}**\n"
+                if 'cve' in exploit:
+                    response += f"🏷️ CVE: `{exploit['cve']}`\n"
+                response += f"📝 {exploit.get('description', '')}\n\n"
+                
+            if len(exploits) > 3:
+                response += f"⚠️ ועוד {len(exploits)-3} exploits נוספים!\n\n"
+        
+        # Exploitation plan
+        if plan:
+            response += f"📋 **תוכנית ניצול מומלצת:**\n\n"
+            for step in plan[:2]:  # Show top 2 steps
+                response += f"**שלב {step['step']}: {step['target']}**\n"
+                response += f"🎯 שיטה: {step['method']}\n"
+                response += f"🛠️ כלים: {', '.join(step['tools_needed'][:3])}\n"
+                response += f"📊 רמת קושי: {step['difficulty']}\n"
+                if step['steps']:
+                    response += f"🔹 צעד ראשון: {step['steps'][0]}\n"
+                response += "\n"
+        
+        response += "🛡️ **הערה:** מידע זה למטרות הגנה והדרכה בלבד!\n"
+        response += "⚖️ השימוש באופן בלתי חוקי אסור ועלול להוביל לתביעה משפטית."
+        
+        return response
+
+    async def exploitinfo_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /exploitinfo command for detailed exploit information"""
+        if not VULN_SCANNER_AVAILABLE:
+            await update.message.reply_text("❌ מודול מידע exploits לא זמין בפריסה זו")
+            return
+            
+        try:
+            user_name = update.effective_user.first_name
+            user_id = update.effective_user.id
+            username = update.effective_user.username or "ללא שם משתמש"
+            
+            logger.info(f"💥 /exploitinfo - משתמש: {user_name} (@{username}) | ID: {user_id}")
+            
+            if not context.args:
+                await update.message.reply_text(
+                    "💥 **מאגר מידע Exploits**\n\n"
+                    "**שימוש:** `/exploitinfo <שירות>`\n\n"
+                    "🎯 **שירותים נתמכים:**\n"
+                    "• `apache` - Apache HTTP Server exploits\n"
+                    "• `nginx` - Nginx exploits\n" 
+                    "• `ssh` - OpenSSH exploits\n"
+                    "• `ftp` - FTP service exploits\n"
+                    "• `mysql` - MySQL exploits\n"
+                    "• `iis` - Microsoft IIS exploits\n\n"
+                    "📖 **דוגמה:**\n"
+                    "`/exploitinfo apache`\n\n"
+                    "⚠️ **אזהרה:** מידע למטרות הגנה בלבד!",
+                    parse_mode='Markdown'
+                )
+                return
+                
+            service = context.args[0].lower()
+            
+            # Import vulnerability scanner for exploit info
+            from vulnerability_scanner import VulnerabilityScanner
+            
+            # Create scanner instance
+            scanner = VulnerabilityScanner()
+            
+            # Get exploits for the service
+            exploits = await scanner.search_known_exploits(service)
+            
+            if not exploits:
+                await update.message.reply_text(
+                    f"❌ **לא נמצאו exploits עבור:** `{service}`\n\n"
+                    "השתמש ב-`/exploitinfo` לרשימת השירותים הנתמכים",
+                    parse_mode='Markdown'
+                )
+                return
+            
+            # Format exploit information
+            response = f"💥 **Exploits עבור {service.upper()}**\n\n"
+            
+            for i, exploit in enumerate(exploits[:3], 1):  # Limit to 3 exploits
+                severity_icon = {
+                    'critical': '🔴',
+                    'high': '🟠',
+                    'medium': '🟡',
+                    'low': '🟢'
+                }.get(exploit.get('severity', '').lower(), '⚪')
+                
+                response += f"{severity_icon} **{i}. {exploit.get('title', 'Unknown')}**\n"
+                
+                if 'cve' in exploit:
+                    response += f"🏷️ **CVE:** `{exploit['cve']}`\n"
+                    
+                response += f"📝 **תיאור:** {exploit.get('description', '')}\n"
+                
+                if 'versions_affected' in exploit:
+                    response += f"🎯 **גרסאות מושפעות:** {exploit['versions_affected']}\n"
+                
+                if 'exploitation' in exploit:
+                    exp = exploit['exploitation']
+                    response += f"⚔️ **שיטת ניצול:** {exp.get('method', 'Unknown')}\n"
+                    
+                    if 'tools' in exp:
+                        tools_str = ', '.join(exp['tools'][:3])
+                        response += f"🛠️ **כלים:** {tools_str}\n"
+                    
+                    if 'payload' in exp:
+                        payload = exp['payload'][:80]
+                        response += f"💣 **Payload:** `{payload}...`\n"
+                    
+                    if 'impact' in exp:
+                        response += f"💥 **השפעה:** {exp['impact']}\n"
+                
+                response += "\n"
+            
+            if len(exploits) > 3:
+                response += f"⚠️ ועוד {len(exploits)-3} exploits נוספים!\n\n"
+            
+            response += "🛡️ **הערה:** מידע זה מיועד למטרות הגנה ולמידה בלבד!"
+            
+            await update.message.reply_text(response, parse_mode='Markdown')
+                
+        except Exception as e:
+            logger.error(f"Exploitinfo command error: {e}")
+            await update.message.reply_text(f"❌ שגיאה בהצגת מידע exploits: {str(e)}")
+
+    async def vulninfo_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /vulninfo command for detailed vulnerability information"""
+        if not VULN_SCANNER_AVAILABLE:
+            await update.message.reply_text("❌ מודול מידע פגיעויות לא זמין בפריסה זו")
+            return
+            
+        try:
+            user_name = update.effective_user.first_name
+            user_id = update.effective_user.id
+            username = update.effective_user.username or "ללא שם משתמש"
+            
+            logger.info(f"📚 /vulninfo - משתמש: {user_name} (@{username}) | ID: {user_id}")
+            
+            if not context.args:
+                await update.message.reply_text(
+                    "📚 **מאגר מידע פגיעויות**\n\n"
+                    "**שימוש:** `/vulninfo <סוג פגיעות>`\n\n"
+                    "🔐 **סוגי פגיעויות זמינים:**\n"
+                    "• `ssl` - פגיעויות SSL/TLS\n"
+                    "• `cert` - תעודות פגות\n" 
+                    "• `headers` - כותרות אבטחה חסרות\n"
+                    "• `server` - חשיפת מידע שרת\n"
+                    "• `ftp` - שירות FTP לא מאובטח\n"
+                    "• `telnet` - שירות Telnet לא מאובטח\n\n"
+                    "📖 **דוגמה:**\n"
+                    "`/vulninfo ssl`\n\n"
+                    "🎯 **מטרה:** הבנת שיטות התקפה למטרות הגנה",
+                    parse_mode='Markdown'
+                )
+                return
+                
+            vuln_type = context.args[0].lower()
+            
+            # Import vulnerability scanner
+            from vulnerability_scanner import VulnerabilityScanner, format_detailed_vulnerability_info
+            
+            # Create scanner instance to access database
+            scanner = VulnerabilityScanner()
+            
+            # Map user input to vulnerability database keys
+            vuln_mapping = {
+                'ssl': 'ssl_version',
+                'tls': 'ssl_version',
+                'cert': 'certificate_expiry', 
+                'certificate': 'certificate_expiry',
+                'headers': 'security_headers',
+                'header': 'security_headers',
+                'server': 'server_info',
+                'info': 'server_info',
+                'ftp': 'insecure_ftp',
+                'telnet': 'insecure_telnet'
+            }
+            
+            if vuln_type not in vuln_mapping:
+                await update.message.reply_text(
+                    f"❌ **סוג פגיעות לא נמצא:** `{vuln_type}`\n\n"
+                    "השתמש ב-`/vulninfo` לרשימת הסוגים הזמינים",
+                    parse_mode='Markdown'
+                )
+                return
+                
+            # Get vulnerability info from database
+            db_key = vuln_mapping[vuln_type]
+            if db_key in scanner.vuln_database:
+                vuln_info = scanner.vuln_database[db_key]
+                detailed_info = format_detailed_vulnerability_info(vuln_info)
+                
+                # Split long messages if needed
+                if len(detailed_info) > 4000:
+                    # Send in parts
+                    parts = [detailed_info[i:i+4000] for i in range(0, len(detailed_info), 4000)]
+                    for i, part in enumerate(parts):
+                        if i == 0:
+                            await update.message.reply_text(part, parse_mode='Markdown')
+                        else:
+                            await update.message.reply_text(f"**המשך חלק {i+1}:**\n\n{part}", parse_mode='Markdown')
+                else:
+                    await update.message.reply_text(detailed_info, parse_mode='Markdown')
+            else:
+                await update.message.reply_text(
+                    f"❌ מידע לא זמין עבור: `{vuln_type}`",
+                    parse_mode='Markdown'
+                )
+                
+        except Exception as e:
+            logger.error(f"Vulninfo command error: {e}")
+            await update.message.reply_text(f"❌ שגיאה בהצגת מידע: {str(e)}")
 
     async def vuln_scan_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /vulnscan command - Advanced vulnerability scanning"""
