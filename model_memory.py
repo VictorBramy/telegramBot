@@ -31,7 +31,8 @@ class ModelMemory:
                 'total_predictions': 0,
                 'correct_predictions': 0,
                 'accuracy_trend': []
-            }
+            },
+            'crypto_alerts': {}  # התראות קריפטו למשתמשים
         }
     
     def save_memory(self):
@@ -202,6 +203,28 @@ class ModelMemory:
         
         self.save_memory()
         return patterns
+    
+    # ============== Crypto Alerts Management ==============
+    def save_user_alerts(self, user_id: str, alerts_data: Dict):
+        """שמור התראות של משתמש"""
+        if 'crypto_alerts' not in self.memory:
+            self.memory['crypto_alerts'] = {}
+        
+        self.memory['crypto_alerts'][str(user_id)] = alerts_data
+        self.save_memory()
+    
+    def load_user_alerts(self, user_id: str) -> Dict:
+        """טען התראות של משתמש"""
+        if 'crypto_alerts' not in self.memory:
+            self.memory['crypto_alerts'] = {}
+        
+        return self.memory['crypto_alerts'].get(str(user_id), {})
+    
+    def delete_user_alerts(self, user_id: str):
+        """מחק התראות של משתמש"""
+        if 'crypto_alerts' in self.memory and str(user_id) in self.memory['crypto_alerts']:
+            del self.memory['crypto_alerts'][str(user_id)]
+            self.save_memory()
 
 # יצירת instance גלובלי
 model_memory = ModelMemory()

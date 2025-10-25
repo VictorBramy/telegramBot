@@ -6,16 +6,28 @@
 
 - 🤖 פקודות בסיסיות (`/start`, `/help`, `/menu`)
 - 📍 **איתור מיקום IP מתקדם** (`/locate`) - חיפוש מיקום גאוגרפי מפורט של IP או דומיין
-- 💬 תגובה אוטומטית חכמה להודעות טקסט
+- �️ **ניתוח פגיעויות ואקספלויטים** - סריקות אבטחה מתקדמות
+- 📊 **ניתוח מניות וחיזוי מחירים** - ML models למסחר חכם
+- 💰 **התראות קריפטו** - מערכת התראות מתקדמת עם אינדיקטורים טכניים
+- �💬 תגובה אוטומטית חכמה להודעות טקסט
 - ⌨️ תפריט אינטראקטיבי עם כפתורים
 - 🔧 ניהול שגיאות מתקדם
 - 📝 לוגים מפורטים
 - 🌍 תמיכה מלאה בעברית
 - 🗺️ מידע גאוגרפי מקיף
 - 🏥 Health check server לניטור
-- 🚀 אופטימיזציה לפריסה בענן Project
+- 🚀 אופטימיזציה לפריסה בענן
 
-בוט טלגרם פשוט וחכם שנבנה בפייתון עם ספריית `python-telegram-bot`.
+## טכנולוגיות
+
+- **Python 3.13** - שפת תכנות מתקדמת
+- **python-telegram-bot 21.0** - Telegram API wrapper
+- **Binance API** - מחירי קריפטו בזמן אמת
+- **Taapi.io** - אינדיקטורים טכניים (RSI, MACD, Bollinger Bands)
+- **yfinance** - נתוני מניות ומסחר
+- **pandas & numpy** - ניתוח נתונים
+- **aiohttp** - בקשות HTTP אסינכרוניות
+- **Docker** - קונטיינרציה ופריסה
 
 ## תכונות
 
@@ -132,29 +144,73 @@ telegram-bot/
 ## פקודות זמינות
 
 ### 🔧 פקודות בסיס
+
 - `/start` - התחלת השיחה עם הבוט
 - `/help` - הצגת עזרה
 - `/menu` - תפריט אינטראקטיבי
 - `/status` - סטטוס מודולים
 
-### 🌐 כלי רשת ואבטחה  
+### 🌐 כלי רשת ואבטחה
+
 - `/locate <IP או דומיין>` - איתור מיקום גאוגרפי
 - `/ping <host>` - בדיקת זמינות
 - `/scan <target> [type]` - סריקת פורטים
 - `/rangescan <range> <port>` - סריקת טווח IP
 
 ### 💥 ניתוח אבטחה מתקדם
+
 - `/exploitscan <target>` - **חדש!** ניתוח exploits מקיף עם תוכנית ניצול
 - `/vulnscan <target>` - סריקת פגיעויות בסיסית
 - `/vulninfo <type>` - מידע מפורט על סוגי פגיעויות
 - `/exploitinfo <service>` - מידע על exploits לשירות ספציפי
 
 ### 📊 ניתוח מניות (אם זמין)
+
 - `/stock <symbol>` - ניתוח מניה מתקדם
+- `/predict <symbol> [days]` - חיזוי מחירים
+
+### 💰 התראות קריפטו (חדש!)
+
+#### פקודות בסיסיות:
+
+- `/newalert` - יצירת התראה חדשה (מחיר/טכנית)
+- `/viewalerts [pair]` - צפייה בהתראות פעילות
+- `/cancelalert <pair> <index>` - ביטול התראה
+- `/getprice <pair>` - קבלת מחיר נוכחי
+- `/priceall` - כל המחירים של זוגות עם התראות
+- `/getindicator <pair> <ind> <time> <params>` - אינדיקטור טכני
+- `/indicators` - רשימת כל האינדיקטורים
+
+#### דוגמאות התראות מחיר:
+
+```
+/newalert BTC/USDT PRICE ABOVE 50000
+/newalert ETH/USDT PRICE BELOW 2000 1h
+/newalert BTC/USDT PRICE PCTCHG 5 30000
+/newalert BTC/USDT PRICE 24HRCHG 10 1h
+```
+
+#### דוגמאות התראות טכניות:
+
+```
+/newalert ETH/USDT RSI 1h default value BELOW 30
+/newalert BTC/USDT MACD 4h default valueMACD ABOVE 0 1h
+/newalert ETH/USDT BBANDS 1d default valueUpperBand ABOVE 3000
+/newalert BTC/USDT SMA 1h period=50 value ABOVE 45000
+```
+
+#### אינדיקטורים נתמכים:
+
+- **RSI** - Relative Strength Index (מצבי קנייה/מכירה יתר)
+- **MACD** - Moving Average Convergence Divergence (שינויי מגמה)
+- **BBANDS** - Bollinger Bands (תנודתיות ומגמות)
+- **SMA** - Simple Moving Average (מגמה כללית)
+- **EMA** - Exponential Moving Average (רגיש לשינויים)
 
 ### דוגמאות שימוש:
 
 #### בדיקות רשת בסיסיות:
+
 ```
 /locate 8.8.8.8
 /ping google.com
@@ -163,10 +219,11 @@ telegram-bot/
 ```
 
 #### ניתוח אבטחה מתקדם:
+
 ```
 /exploitscan example.com     # ניתוח מקיף
 /vulnscan target.com         # בדיקת פגיעויות
-/vulninfo ssl               # מידע על SSL issues  
+/vulninfo ssl               # מידע על SSL issues
 /exploitinfo apache         # Apache exploits
 ```
 

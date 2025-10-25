@@ -62,6 +62,20 @@ except ImportError as e:
 except Exception as e:
     logger.error(f"Failed to load stock analysis: {e}")
 
+# Import crypto alerts module
+CRYPTO_ALERTS_AVAILABLE = False
+try:
+    from crypto_alerts import (
+        CryptoAlertManager, SimpleAlert, TechnicalAlert,
+        parse_cooldown, get_indicators_list, SIMPLE_COMPARISONS, BINANCE_TIMEFRAMES
+    )
+    CRYPTO_ALERTS_AVAILABLE = True
+    logger.info("Crypto alerts module loaded successfully")
+except ImportError as e:
+    logger.warning(f"Crypto alerts not available: {e}")
+except Exception as e:
+    logger.error(f"Failed to load crypto alerts: {e}")
+
 # Create separate logger for user activity only
 user_logger = logging.getLogger("user_activity")
 user_handler = logging.FileHandler('user_activity.log', encoding='utf-8')
@@ -99,6 +113,14 @@ class TelegramBot:
         self.application = Application.builder().token(token).build()
         self.network_tools = NetworkTools()
         self.range_scanner = IPRangeScanner(max_workers=1000, timeout=2.0)
+        
+        # Initialize crypto alerts if available
+        self.crypto_manager = None
+        if CRYPTO_ALERTS_AVAILABLE:
+            taapi_key = os.getenv('TAAPIIO_APIKEY')
+            self.crypto_manager = CryptoAlertManager(taapi_key)
+            logger.info("Crypto alert manager initialized")
+        
         self.setup_handlers()
 
     def setup_handlers(self):
@@ -116,6 +138,16 @@ class TelegramBot:
         if STOCK_ANALYSIS_AVAILABLE:
             self.application.add_handler(CommandHandler("stock", self.stock_command))
             self.application.add_handler(CommandHandler("predict", self.predict_command))
+        
+        # Crypto alerts commands (if available)
+        if CRYPTO_ALERTS_AVAILABLE and self.crypto_manager:
+            self.application.add_handler(CommandHandler("newalert", self.new_alert_command))
+            self.application.add_handler(CommandHandler("viewalerts", self.view_alerts_command))
+            self.application.add_handler(CommandHandler("cancelalert", self.cancel_alert_command))
+            self.application.add_handler(CommandHandler("getprice", self.get_price_command))
+            self.application.add_handler(CommandHandler("priceall", self.price_all_command))
+            self.application.add_handler(CommandHandler("getindicator", self.get_indicator_command))
+            self.application.add_handler(CommandHandler("indicators", self.indicators_command))
         
         # Callback query handler for inline keyboards
         self.application.add_handler(CallbackQueryHandler(self.button_callback))
@@ -177,20 +209,25 @@ class TelegramBot:
 /ping <IP או דומיין> - בדיקת זמינות שרת
 /rangescan <טווח IP> <פורט> - סריקת טווח IP לפורט ספציפי
 
+🔹 **ניתוח מניות:**
+/stock <סמל> - ניתוח מניה
+/predict <סמל> [ימים] - חיזוי מחירים
+
+� **התראות קריפטו:**
+/newalert - יצירת התראה חדשה
+/viewalerts - צפייה בהתראות
+/cancelalert - ביטול התראה
+/getprice - קבלת מחיר נוכחי
+/priceall - כל המחירים
+/getindicator - קבלת אינדיקטור טכני
+/indicators - רשימת אינדיקטורים
+
 🔹 **דוגמאות:**
 /locate 8.8.8.8
 /scan google.com
-/scan 192.168.1.1 quick
-/ping github.com
-/rangescan 213.0.0.0-213.0.0.255 5900
-/rangescan 192.168.1.0/24 22
-
-🔹 **סוגי סריקה:**
-• quick - 13 פורטים חשובים (מהיר)
-• common - 19 פורטים נפוצים (ברירת מחדל)
-• top100 - 100 הפורטים הנפוצים ביותר
-• web - פורטי שירותי אינטרנט
-• full - כל הפורטים 1-65535 (איטי מאוד!)
+/stock AAPL
+/newalert BTC/USDT PRICE ABOVE 50000
+/getprice BTC/USDT
 
 פשוט שלח לי הודעה ואני אענה לך!
 """
@@ -207,7 +244,8 @@ class TelegramBot:
         keyboard = [
             [InlineKeyboardButton("🔍 כלי רשת", callback_data='network_tools')],
             [InlineKeyboardButton("📈 ניתוח מניות", callback_data='stock_tools')],
-            [InlineKeyboardButton("� דוגמאות מהירות", callback_data='quick_examples')],
+            [InlineKeyboardButton("💰 התראות קריפטו", callback_data='crypto_tools')],
+            [InlineKeyboardButton("⚡ דוגמאות מהירות", callback_data='quick_examples')],
             [InlineKeyboardButton("❓ עזרה ומידע", callback_data='help_info')],
             [InlineKeyboardButton("📞 יצירת קשר", callback_data='contact')]
         ]
@@ -271,6 +309,38 @@ class TelegramBot:
                 await query.edit_message_text(
                     "❌ **שירות ניתוח מניות לא זמין כרגע**\n\n"
                     "חסרים חבילות נדרשות לניתוח מניות.\n"
+                    "אנא פנה למפתח הבוט לעדכון.",
+                    reply_markup=InlineKeyboardMarkup([[
+                        InlineKeyboardButton("🔙 חזרה לתפריט ראשי", callback_data='main_menu')
+                    ]])
+                )
+        
+        elif query.data == 'crypto_tools':
+            if CRYPTO_ALERTS_AVAILABLE:
+                # Crypto alerts submenu
+                keyboard = [
+                    [InlineKeyboardButton("💰 התראת מחיר", callback_data='crypto_price_demo')],
+                    [InlineKeyboardButton("📊 התראה טכנית", callback_data='crypto_tech_demo')],
+                    [InlineKeyboardButton("📋 צפייה בהתראות", callback_data='crypto_view')],
+                    [InlineKeyboardButton("💵 מחיר נוכחי", callback_data='crypto_price')],
+                    [InlineKeyboardButton("📈 אינדיקטורים", callback_data='crypto_indicators')],
+                    [InlineKeyboardButton("🔙 חזרה לתפריט ראשי", callback_data='main_menu')]
+                ]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                await query.edit_message_text(
+                    "💰 **התראות קריפטו מתקדמות**\n\n"
+                    "📊 התראות מחיר (ABOVE/BELOW/PCTCHG/24HR)\n"
+                    "📈 אינדיקטורים טכניים (RSI/MACD/BBANDS/SMA/EMA)\n"
+                    "⏰ מערכת Cooldown חכמה\n"
+                    "🔔 התראות אוטומטיות\n"
+                    "💹 תמיכה בכל זוגות Binance\n\n"
+                    "בחר את הכלי שברצונך להשתמש בו:",
+                    reply_markup=reply_markup
+                )
+            else:
+                await query.edit_message_text(
+                    "❌ **שירות התראות קריפטו לא זמין כרגע**\n\n"
+                    "חסרים חבילות נדרשות להתראות קריפטו.\n"
                     "אנא פנה למפתח הבוט לעדכון.",
                     reply_markup=InlineKeyboardMarkup([[
                         InlineKeyboardButton("🔙 חזרה לתפריט ראשי", callback_data='main_menu')
@@ -1420,24 +1490,6 @@ class TelegramBot:
                 "הבוט יבדוק אם השרת זמין ויציג זמן תגובה.",
                 parse_mode='Markdown'
             )
-        elif query.data == 'range_scan_demo':
-            await query.edit_message_text(
-                "🎯 **סריקת טווח IP מתקדמת**\n\n"
-                "סרוק אלפי IP במהירות הבזק!\n"
-                "`/rangescan <טווח> <פורט>`\n\n"
-                "🔹 **פורמטים נתמכים:**\n"
-                "• **CIDR:** `/rangescan 192.168.1.0/24 22`\n"
-                "• **טווח:** `/rangescan 213.0.0.0-213.0.0.255 5900`\n"
-                "• **IP יחיד:** `/rangescan 8.8.8.8 80`\n\n"
-                "🚀 **פורטים פופולריים:**\n"
-                "• `5900` - VNC Server\n"
-                "• `22` - SSH\n"
-                "• `3389` - RDP\n"
-                "• `23` - Telnet\n\n"
-                "⚡ **ביצועים:** עד 1000+ IP/שנייה!\n"
-                "⚠️ **זהירות:** טווחים גדולים לוקחים זמן!",
-                parse_mode='Markdown'
-            )
             return
         
         target = context.args[0]
@@ -1918,6 +1970,309 @@ class TelegramBot:
                 f"❗ **שגיאה:** `{str(e)}`",
                 parse_mode='Markdown'
             )
+    
+    # ============== Crypto Alerts Commands ==============
+    
+    async def _send_crypto_alert(self, user_id: str, message: str):
+        """Callback function to send crypto alerts"""
+        try:
+            await self.application.bot.send_message(
+                chat_id=user_id,
+                text=message,
+                parse_mode='Markdown'
+            )
+        except Exception as e:
+            logger.error(f"Error sending crypto alert to {user_id}: {e}")
+    
+    async def new_alert_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Create new crypto price/indicator alert"""
+        if not CRYPTO_ALERTS_AVAILABLE or not self.crypto_manager:
+            await update.message.reply_text("❌ Crypto alerts not available")
+            return
+        
+        user_id = str(update.effective_user.id)
+        
+        if not context.args:
+            help_text = """
+📊 **יצירת התראת קריפטו**
+
+🔹 **התראת מחיר פשוטה:**
+`/newalert <PAIR> PRICE <COMP> <TARGET> [COOLDOWN]`
+
+**דוגמאות:**
+• `/newalert BTC/USDT PRICE ABOVE 50000`
+• `/newalert ETH/USDT PRICE BELOW 2000 1h`
+• `/newalert BTC/USDT PRICE PCTCHG 5 30000`
+• `/newalert BTC/USDT PRICE 24HRCHG 10 1h`
+
+**השוואות:** ABOVE, BELOW, PCTCHG, 24HRCHG
+**Cooldown:** 30s, 5m, 1h, 2h, 1d
+
+🔹 **התראה טכנית:**
+`/newalert <PAIR> <IND> <TIME> <PARAMS> <OUTPUT> <COMP> <TARGET> [COOLDOWN]`
+
+**דוגמאות:**
+• `/newalert ETH/USDT RSI 1h default value BELOW 30`
+• `/newalert BTC/USDT MACD 4h default valueMACD ABOVE 0 1h`
+• `/newalert ETH/USDT BBANDS 1d default valueUpperBand ABOVE 3000`
+
+📚 **לרשימת אינדיקטורים:** `/indicators`
+            """
+            await update.message.reply_text(help_text, parse_mode='Markdown')
+            return
+        
+        try:
+            args = context.args
+            pair = args[0].upper()
+            indicator_type = args[1].upper()
+            
+            # Simple price alert
+            if indicator_type == "PRICE":
+                if len(args) < 4:
+                    await update.message.reply_text("❌ פורמט שגוי. דוגמה: /newalert BTC/USDT PRICE ABOVE 50000")
+                    return
+                
+                comparison = args[2].upper()
+                target = float(args[3])
+                entry_price = args[4] if len(args) > 4 and comparison in ["PCTCHG"] else None
+                cooldown_str = args[5] if len(args) > 5 else (args[4] if comparison not in ["PCTCHG"] and len(args) > 4 else None)
+                
+                if comparison not in SIMPLE_COMPARISONS:
+                    await update.message.reply_text(f"❌ השוואה לא תקינה. אפשרויות: {', '.join(SIMPLE_COMPARISONS)}")
+                    return
+                
+                # Get entry price for PCTCHG
+                if comparison == "PCTCHG":
+                    from crypto_alerts import BinanceAPI
+                    entry_price = float(entry_price) if entry_price else BinanceAPI.get_price(pair)
+                    target = target / 100  # Convert percentage to decimal
+                
+                cooldown = parse_cooldown(cooldown_str)
+                
+                alert = SimpleAlert(
+                    pair=pair,
+                    indicator="PRICE",
+                    comparison=comparison,
+                    target=target,
+                    entry_price=entry_price,
+                    cooldown=cooldown
+                )
+                
+                result = self.crypto_manager.add_alert(user_id, alert)
+                await update.message.reply_text(result)
+            
+            # Technical indicator alert
+            elif indicator_type in ['RSI', 'MACD', 'BBANDS', 'SMA', 'EMA']:
+                if len(args) < 7:
+                    await update.message.reply_text(
+                        "❌ פורמט שגוי. דוגמה:\n"
+                        "/newalert BTC/USDT RSI 1h default value BELOW 30"
+                    )
+                    return
+                
+                timeframe = args[2].lower()
+                params_str = args[3]
+                output_value = args[4]
+                comparison = args[5].upper()
+                target = float(args[6])
+                cooldown_str = args[7] if len(args) > 7 else None
+                
+                if timeframe not in BINANCE_TIMEFRAMES:
+                    await update.message.reply_text(f"❌ טווח זמן לא תקין. אפשרויות: {', '.join(BINANCE_TIMEFRAMES)}")
+                    return
+                
+                # Parse params
+                params = {}
+                if params_str.lower() != "default":
+                    for param in params_str.split(','):
+                        key, value = param.split('=')
+                        params[key] = value
+                
+                cooldown = parse_cooldown(cooldown_str)
+                
+                alert = TechnicalAlert(
+                    pair=pair,
+                    indicator=indicator_type,
+                    timeframe=timeframe,
+                    params=params,
+                    output_value=output_value,
+                    comparison=comparison,
+                    target=target,
+                    cooldown=cooldown
+                )
+                
+                result = self.crypto_manager.add_alert(user_id, alert)
+                await update.message.reply_text(result)
+            
+            else:
+                await update.message.reply_text("❌ אינדיקטור לא ידוע. השתמש ב-/indicators לרשימה מלאה")
+        
+        except Exception as e:
+            logger.error(f"Error in new_alert_command: {e}")
+            await update.message.reply_text(f"❌ שגיאה: {str(e)}")
+    
+    async def view_alerts_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """View all active alerts"""
+        if not CRYPTO_ALERTS_AVAILABLE or not self.crypto_manager:
+            await update.message.reply_text("❌ Crypto alerts not available")
+            return
+        
+        user_id = str(update.effective_user.id)
+        pair = context.args[0].upper() if context.args else None
+        
+        formatted = self.crypto_manager.format_alerts(user_id, pair)
+        await update.message.reply_text(formatted, parse_mode='Markdown')
+    
+    async def cancel_alert_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Cancel/delete an alert"""
+        if not CRYPTO_ALERTS_AVAILABLE or not self.crypto_manager:
+            await update.message.reply_text("❌ Crypto alerts not available")
+            return
+        
+        if len(context.args) < 2:
+            await update.message.reply_text(
+                "❌ שימוש: `/cancelalert <PAIR> <INDEX>`\n\n"
+                "דוגמה: `/cancelalert BTC/USDT 0`\n\n"
+                "💡 השתמש ב-/viewalerts לראות את האינדקסים",
+                parse_mode='Markdown'
+            )
+            return
+        
+        user_id = str(update.effective_user.id)
+        pair = context.args[0].upper()
+        index = int(context.args[1])
+        
+        result = self.crypto_manager.remove_alert(user_id, pair, index)
+        await update.message.reply_text(result)
+    
+    async def get_price_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Get current crypto price"""
+        if not CRYPTO_ALERTS_AVAILABLE:
+            await update.message.reply_text("❌ Crypto alerts not available")
+            return
+        
+        if not context.args:
+            await update.message.reply_text(
+                "💰 **קבלת מחיר קריפטו**\n\n"
+                "שימוש: `/getprice <PAIR>`\n\n"
+                "דוגמאות:\n"
+                "• `/getprice BTC/USDT`\n"
+                "• `/getprice ETH/USDT`\n"
+                "• `/getprice BNB/USDT`",
+                parse_mode='Markdown'
+            )
+            return
+        
+        pair = context.args[0].upper()
+        
+        try:
+            from crypto_alerts import BinanceAPI
+            price = BinanceAPI.get_price(pair)
+            change_24h = BinanceAPI.get_price_change(pair, "1d")
+            
+            direction = "📈" if change_24h > 0 else "📉"
+            
+            message = f"💰 **{pair}**\n\n"
+            message += f"**מחיר נוכחי:** ${price:,.2f}\n"
+            message += f"**שינוי 24 שעות:** {direction} {abs(change_24h):.2f}%"
+            
+            await update.message.reply_text(message, parse_mode='Markdown')
+        
+        except Exception as e:
+            await update.message.reply_text(f"❌ שגיאה: {str(e)}")
+    
+    async def price_all_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Get prices for all pairs with active alerts"""
+        if not CRYPTO_ALERTS_AVAILABLE or not self.crypto_manager:
+            await update.message.reply_text("❌ Crypto alerts not available")
+            return
+        
+        user_id = str(update.effective_user.id)
+        alerts = self.crypto_manager.get_alerts(user_id)
+        
+        if not alerts:
+            await update.message.reply_text("📭 אין לך התראות פעילות")
+            return
+        
+        # Get unique pairs
+        pairs = list(set([alert.pair for alert in alerts]))
+        
+        message = "💰 **מחירים נוכחיים:**\n\n"
+        
+        from crypto_alerts import BinanceAPI
+        for pair in pairs:
+            try:
+                price = BinanceAPI.get_price(pair)
+                change = BinanceAPI.get_price_change(pair, "1d")
+                direction = "📈" if change > 0 else "📉"
+                message += f"**{pair}:** ${price:,.2f} {direction} {abs(change):.2f}%\n"
+            except Exception as e:
+                message += f"**{pair}:** ❌ Error\n"
+        
+        await update.message.reply_text(message, parse_mode='Markdown')
+    
+    async def get_indicator_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Get current technical indicator value"""
+        if not CRYPTO_ALERTS_AVAILABLE or not self.crypto_manager:
+            await update.message.reply_text("❌ Crypto alerts not available")
+            return
+        
+        if not self.crypto_manager.taapi or not self.crypto_manager.taapi.enabled:
+            await update.message.reply_text(
+                "❌ אינדיקטורים טכניים לא זמינים\n"
+                "נדרש TAAPIIO_APIKEY"
+            )
+            return
+        
+        if len(context.args) < 4:
+            await update.message.reply_text(
+                "📊 **קבלת אינדיקטור טכני**\n\n"
+                "שימוש: `/getindicator <PAIR> <IND> <TIME> <PARAMS>`\n\n"
+                "דוגמאות:\n"
+                "• `/getindicator BTC/USDT RSI 1h default`\n"
+                "• `/getindicator ETH/USDT MACD 4h default`\n"
+                "• `/getindicator BTC/USDT BBANDS 1d period=20,stddev=2`",
+                parse_mode='Markdown'
+            )
+            return
+        
+        pair = context.args[0].upper()
+        indicator = context.args[1].upper()
+        timeframe = context.args[2].lower()
+        params_str = context.args[3]
+        
+        try:
+            # Parse params
+            params = {}
+            if params_str.lower() != "default":
+                for param in params_str.split(','):
+                    key, value = param.split('=')
+                    params[key] = value
+            
+            data = self.crypto_manager.taapi.get_indicator(pair, indicator, timeframe, params)
+            
+            message = f"📊 **{indicator} - {pair}**\n"
+            message += f"⏰ Timeframe: {timeframe}\n\n"
+            
+            for key, value in data.items():
+                if isinstance(value, (int, float)):
+                    message += f"**{key}:** {value:.4f}\n"
+                else:
+                    message += f"**{key}:** {value}\n"
+            
+            await update.message.reply_text(message, parse_mode='Markdown')
+        
+        except Exception as e:
+            await update.message.reply_text(f"❌ שגיאה: {str(e)}")
+    
+    async def indicators_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """List all available indicators"""
+        if not CRYPTO_ALERTS_AVAILABLE:
+            await update.message.reply_text("❌ Crypto alerts not available")
+            return
+        
+        indicators_list = get_indicators_list()
+        await update.message.reply_text(indicators_list, parse_mode='Markdown')
 
 
 def main():
@@ -1938,6 +2293,12 @@ def main():
         # Create and run bot
         bot = TelegramBot(bot_token)
         logger.info("Bot initialized successfully")
+        
+        # Start crypto alerts monitoring if available
+        if CRYPTO_ALERTS_AVAILABLE and bot.crypto_manager:
+            bot.crypto_manager.start_monitoring(bot._send_crypto_alert)
+            logger.info("Crypto alerts monitoring started")
+        
         bot.run()
         
     except KeyboardInterrupt:
