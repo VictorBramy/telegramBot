@@ -72,7 +72,9 @@ class MinimalBot:
         # Initialize crypto alerts manager if available
         self.crypto_manager = None
         if CRYPTO_ALERTS_AVAILABLE:
-            self.crypto_manager = CryptoAlertManager(self._send_crypto_alert)
+            # Get taapi key from environment
+            taapi_key = os.getenv('TAAPIIO_APIKEY')
+            self.crypto_manager = CryptoAlertManager(taapi_key)
             logger.info("Crypto alerts manager initialized")
         
         self.setup_handlers()
@@ -1652,7 +1654,7 @@ def main():
         # Start crypto alerts monitoring if available
         if CRYPTO_ALERTS_AVAILABLE and bot.crypto_manager:
             logger.info("Starting crypto alerts monitoring...")
-            bot.crypto_manager.start_monitoring()
+            bot.crypto_manager.start_monitoring(bot._send_crypto_alert)
         
         logger.info("Bot ready - starting polling...")
         bot.run()
