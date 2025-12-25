@@ -2574,6 +2574,8 @@ class TelegramBot:
     
     async def tenbis_html_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /tenbis_html command - Generate and send HTML report"""
+        from datetime import date
+        
         if not TENBIS_AVAILABLE:
             await update.message.reply_text("❌ 10bis module not available")
             return
