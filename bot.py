@@ -370,6 +370,38 @@ class TelegramBot:
                     ]])
                 )
         
+        elif query.data == 'tenbis_tools':
+            if TENBIS_AVAILABLE:
+                # 10Bis submenu
+                keyboard = [
+                    [InlineKeyboardButton("🔐 התחבר לחשבון", callback_data='tenbis_login_demo')],
+                    [InlineKeyboardButton("🎫 הצג שוברים", callback_data='tenbis_vouchers_demo')],
+                    [InlineKeyboardButton("📋 הוראות שימוש", callback_data='tenbis_help')],
+                    [InlineKeyboardButton("👋 התנתק", callback_data='tenbis_logout_demo')],
+                    [InlineKeyboardButton("🔙 חזרה לתפריט ראשי", callback_data='main_menu')]
+                ]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                await query.edit_message_text(
+                    "🍔 **שוברי 10Bis**\n\n"
+                    "🔐 התחבר לחשבון 10Bis שלך\n"
+                    "🎫 צפה בכל השוברים הפעילים\n"
+                    "📸 קבל ברקודים לסריקה\n"
+                    "💰 סיכום סכומים\n"
+                    "💾 שמירת session אוטומטית\n\n"
+                    "בחר פעולה:",
+                    reply_markup=reply_markup,
+                    parse_mode='Markdown'
+                )
+            else:
+                await query.edit_message_text(
+                    "❌ **שירות 10Bis לא זמין כרגע**\n\n"
+                    "חסרים חבילות נדרשות לשירות 10Bis.\n"
+                    "אנא פנה למפתח הבוט לעדכון.",
+                    reply_markup=InlineKeyboardMarkup([[
+                        InlineKeyboardButton("🔙 חזרה לתפריט ראשי", callback_data='main_menu')
+                    ]])
+                )
+        
         elif query.data == 'scan_menu':
             # Port scanning submenu with different scan types
             keyboard = [
@@ -661,6 +693,87 @@ class TelegramBot:
             )
         elif query.data == 'contact':
             await query.edit_message_text("📞 ליצירת קשר שלח הודעה פרטית למפתח @VB_International")
+        
+        # Main menu handler
+        elif query.data == 'main_menu':
+            keyboard = [
+                [InlineKeyboardButton("🔍 כלי רשת", callback_data='network_tools')],
+                [InlineKeyboardButton("📈 ניתוח מניות", callback_data='stock_tools')],
+                [InlineKeyboardButton("💰 התראות קריפטו", callback_data='crypto_tools')],
+                [InlineKeyboardButton("🍔 שוברי 10Bis", callback_data='tenbis_tools')],
+                [InlineKeyboardButton("⚡ דוגמאות מהירות", callback_data='quick_examples')],
+                [InlineKeyboardButton("❓ עזרה ומידע", callback_data='help_info')],
+                [InlineKeyboardButton("📞 יצירת קשר", callback_data='contact')]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            await query.edit_message_text(
+                "בחר אפשרות מהתפריט:",
+                reply_markup=reply_markup
+            )
+        
+        # 10Bis demo handlers
+        elif query.data == 'tenbis_login_demo':
+            await query.edit_message_text(
+                "🔐 **התחברות ל-10Bis**\n\n"
+                "**שלב 1:** שלח את האימייל שלך\n"
+                "`/tenbis_login your@email.com`\n\n"
+                "**שלב 2:** תקבל קוד ל-SMS/Email\n"
+                "פשוט שלח את הקוד כהודעה רגילה\n\n"
+                "**דוגמה:**\n"
+                "• `/tenbis_login user@example.com`\n"
+                "• `123456` (הקוד שקיבלת)\n\n"
+                "🔒 **הסשן נשמר** - לא צריך להתחבר כל פעם!",
+                parse_mode='Markdown'
+            )
+        
+        elif query.data == 'tenbis_vouchers_demo':
+            await query.edit_message_text(
+                "🎫 **צפייה בשוברים פעילים**\n\n"
+                "**שימוש:** `/tenbis_vouchers [חודשים]`\n\n"
+                "🔹 **דוגמאות:**\n"
+                "• `/tenbis_vouchers` - 12 חודשים (ברירת מחדל)\n"
+                "• `/tenbis_vouchers 6` - 6 חודשים אחורה\n"
+                "• `/tenbis_vouchers 24` - שנתיים אחורה\n\n"
+                "📊 **מה תקבל:**\n"
+                "• מספר שוברים פעילים\n"
+                "• סכום כולל\n"
+                "• פירוט כל שובר\n"
+                "• תמונת ברקוד לסריקה\n\n"
+                "💡 **טיפ:** התחל עם /tenbis_vouchers לראות הכל",
+                parse_mode='Markdown'
+            )
+        
+        elif query.data == 'tenbis_help':
+            await query.edit_message_text(
+                "📖 **מדריך שימוש מהיר - 10Bis**\n\n"
+                "**1️⃣ התחברות:**\n"
+                "`/tenbis_login your@email.com`\n"
+                "שלח את הקוד שתקבל\n\n"
+                "**2️⃣ צפייה בשוברים:**\n"
+                "`/tenbis_vouchers`\n\n"
+                "**3️⃣ התנתקות:**\n"
+                "`/tenbis_logout`\n\n"
+                "❓ **שאלות נפוצות:**\n"
+                "• צריך להתחבר כל פעם? **לא!**\n"
+                "• קוד לא עובד? **וודא 6 ספרות בלי רווחים**\n"
+                "• אין שוברים? **נסה תקופה ארוכה יותר**\n\n"
+                "📚 **מדריך מלא:** [TENBIS_QUICK_START.md](https://github.com/VictorBramy/telegramBot/blob/main/TENBIS_QUICK_START.md)",
+                parse_mode='Markdown'
+            )
+        
+        elif query.data == 'tenbis_logout_demo':
+            await query.edit_message_text(
+                "👋 **התנתקות מ-10Bis**\n\n"
+                "**פקודה:** `/tenbis_logout`\n\n"
+                "🗑️ **מה קורה:**\n"
+                "• מחיקת session שמור\n"
+                "• מחיקת tokens\n"
+                "• ניקוי מידע מקומי\n\n"
+                "⚠️ **לאחר התנתקות:**\n"
+                "תצטרך להתחבר שוב עם `/tenbis_login`\n\n"
+                "🔒 **אבטחה:** מומלץ להתנתק אם משתמש במכשיר משותף",
+                parse_mode='Markdown'
+            )
         
         # Demo handlers for menu navigation
         elif query.data == 'ping_demo':
