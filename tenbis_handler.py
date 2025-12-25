@@ -346,6 +346,7 @@ def generate_html_report(vouchers: List[Dict], user_name: str = "User") -> str:
 """
     
     # Complete HTML page
+    today_date = date.today().strftime('%d/%m/%Y')
     html_content = f"""<!DOCTYPE html>
 <html dir="rtl" lang="he">
 <head>
@@ -760,7 +761,7 @@ document.addEventListener('DOMContentLoaded', function() {{
             <p><strong>סה"כ שוברים:</strong> {count}</p>
             <p><strong>סה"כ סכום:</strong> {total_amount} ₪</p>
             <p><strong>נוצר עבור:</strong> {user_name}</p>
-            <p><strong>תאריך:</strong> {date.today().strftime('%d/%m/%Y')}</p>
+            <p><strong>תאריך:</strong> {today_date}</p>
         </div>
         
         <div class="gallery-section">
