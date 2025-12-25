@@ -194,7 +194,9 @@ class TenbisHandler:
             
             if all_vouchers:
                 total_amount = sum(float(v['amount']) for v in all_vouchers)
-                message = f"✅ נמצאו {len(all_vouchers)} שוברים פעילים!\n💰 סה\"כ: {total_amount} ₪"
+                newline = '\n'
+                quote = '"'
+                message = f"✅ נמצאו {len(all_vouchers)} שוברים פעילים!{newline}💰 סה{quote}כ: {total_amount} ₪"
                 return True, message, all_vouchers
             else:
                 return True, "אין שוברים פעילים כרגע 🤷‍♂️", []
