@@ -76,6 +76,17 @@ except ImportError as e:
 except Exception as e:
     logger.error(f"Failed to load crypto alerts: {e}")
 
+# Import 10bis handler module
+TENBIS_AVAILABLE = False
+try:
+    from tenbis_handler import TenbisHandler, format_voucher_message
+    TENBIS_AVAILABLE = True
+    logger.info("10bis handler module loaded successfully")
+except ImportError as e:
+    logger.warning(f"10bis handler not available: {e}")
+except Exception as e:
+    logger.error(f"Failed to load 10bis handler: {e}")
+
 # Create separate logger for user activity only
 user_logger = logging.getLogger("user_activity")
 user_handler = logging.FileHandler('user_activity.log', encoding='utf-8')
@@ -121,6 +132,10 @@ class TelegramBot:
             self.crypto_manager = CryptoAlertManager(taapi_key)
             logger.info("Crypto alert manager initialized")
         
+        # Initialize 10bis handlers dictionary for users
+        self.tenbis_handlers = {}
+        self.tenbis_auth_states = {}  # Track authentication state per user
+        
         self.setup_handlers()
 
     def setup_handlers(self):
@@ -148,6 +163,12 @@ class TelegramBot:
             self.application.add_handler(CommandHandler("priceall", self.price_all_command))
             self.application.add_handler(CommandHandler("getindicator", self.get_indicator_command))
             self.application.add_handler(CommandHandler("indicators", self.indicators_command))
+        
+        # 10bis commands (if available)
+        if TENBIS_AVAILABLE:
+            self.application.add_handler(CommandHandler("tenbis_login", self.tenbis_login_command))
+            self.application.add_handler(CommandHandler("tenbis_vouchers", self.tenbis_vouchers_command))
+            self.application.add_handler(CommandHandler("tenbis_logout", self.tenbis_logout_command))
         
         # Callback query handler for inline keyboards
         self.application.add_handler(CallbackQueryHandler(self.button_callback))
@@ -228,6 +249,7 @@ class TelegramBot:
 /stock AAPL
 /newalert BTC/USDT PRICE ABOVE 50000
 /getprice BTC/USDT
+/tenbis_login user@email.com
 
 פשוט שלח לי הודעה ואני אענה לך!
 """
@@ -245,6 +267,7 @@ class TelegramBot:
             [InlineKeyboardButton("🔍 כלי רשת", callback_data='network_tools')],
             [InlineKeyboardButton("📈 ניתוח מניות", callback_data='stock_tools')],
             [InlineKeyboardButton("💰 התראות קריפטו", callback_data='crypto_tools')],
+            [InlineKeyboardButton("🍔 שוברי 10Bis", callback_data='tenbis_tools')],
             [InlineKeyboardButton("⚡ דוגמאות מהירות", callback_data='quick_examples')],
             [InlineKeyboardButton("❓ עזרה ומידע", callback_data='help_info')],
             [InlineKeyboardButton("📞 יצירת קשר", callback_data='contact')]
@@ -2273,6 +2296,156 @@ class TelegramBot:
         
         indicators_list = get_indicators_list()
         await update.message.reply_text(indicators_list, parse_mode='Markdown')
+    
+    # ========================
+    # 10bis Commands
+    # ========================
+    
+    async def tenbis_login_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /tenbis_login command"""
+        if not TENBIS_AVAILABLE:
+            await update.message.reply_text("❌ 10bis module not available")
+            return
+        
+        user_id = update.effective_user.id
+        user_name = update.effective_user.first_name
+        
+        logger.info(f"🍔 /tenbis_login - משתמש: {user_name} | ID: {user_id}")
+        
+        # Initialize handler for user if not exists
+        if user_id not in self.tenbis_handlers:
+            self.tenbis_handlers[user_id] = TenbisHandler(user_id)
+        
+        handler = self.tenbis_handlers[user_id]
+        
+        # Check if already authenticated
+        if handler.load_session():
+            await update.message.reply_text(
+                "✅ כבר מחובר!\n\n"
+                "השתמש ב-/tenbis_vouchers כדי לראות את השוברים שלך.\n"
+                "או /tenbis_logout כדי להתנתק."
+            )
+            return
+        
+        # Check if we have email from args
+        if not context.args:
+            await update.message.reply_text(
+                "📧 **התחברות ל-10Bis**\n\n"
+                "שלח את האימייל שלך:\n"
+                "/tenbis_login your@email.com"
+            )
+            return
+        
+        email = context.args[0]
+        
+        # Send OTP
+        success, message = await handler.authenticate(email)
+        
+        if success:
+            # Save state - waiting for OTP
+            self.tenbis_auth_states[user_id] = {
+                'handler': handler,
+                'waiting_for_otp': True
+            }
+        
+        await update.message.reply_text(message)
+    
+    async def tenbis_vouchers_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /tenbis_vouchers command"""
+        if not TENBIS_AVAILABLE:
+            await update.message.reply_text("❌ 10bis module not available")
+            return
+        
+        user_id = update.effective_user.id
+        user_name = update.effective_user.first_name
+        
+        logger.info(f"🎫 /tenbis_vouchers - משתמש: {user_name} | ID: {user_id}")
+        
+        # Check if handler exists
+        if user_id not in self.tenbis_handlers:
+            self.tenbis_handlers[user_id] = TenbisHandler(user_id)
+        
+        handler = self.tenbis_handlers[user_id]
+        
+        # Get months back (default 12)
+        months_back = 12
+        if context.args:
+            try:
+                months_back = int(context.args[0])
+            except ValueError:
+                pass
+        
+        await update.message.reply_text("🔍 מחפש שוברים פעילים... אנא המתן...")
+        
+        success, message, vouchers = handler.get_vouchers(months_back)
+        
+        await update.message.reply_text(message, parse_mode='Markdown')
+        
+        if vouchers:
+            # Send vouchers in batches (5 per message to avoid flooding)
+            batch_size = 5
+            for i in range(0, len(vouchers), batch_size):
+                batch = vouchers[i:i + batch_size]
+                batch_message = ""
+                for idx, voucher in enumerate(batch, start=i+1):
+                    batch_message += format_voucher_message(voucher, idx)
+                
+                await update.message.reply_text(batch_message, parse_mode='Markdown')
+                
+                # Send barcode images
+                for voucher in batch:
+                    try:
+                        await update.message.reply_photo(
+                            photo=voucher['barcode_img_url'],
+                            caption=f"🎫 ברקוד #{i+batch.index(voucher)+1}: {voucher['barcode_number']}"
+                        )
+                    except Exception as e:
+                        logger.error(f"Failed to send barcode image: {e}")
+    
+    async def tenbis_logout_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /tenbis_logout command"""
+        if not TENBIS_AVAILABLE:
+            await update.message.reply_text("❌ 10bis module not available")
+            return
+        
+        user_id = update.effective_user.id
+        user_name = update.effective_user.first_name
+        
+        logger.info(f"👋 /tenbis_logout - משתמש: {user_name} | ID: {user_id}")
+        
+        if user_id in self.tenbis_handlers:
+            self.tenbis_handlers[user_id].clear_session()
+            del self.tenbis_handlers[user_id]
+        
+        if user_id in self.tenbis_auth_states:
+            del self.tenbis_auth_states[user_id]
+        
+        await update.message.reply_text("✅ התנתקת בהצלחה מ-10Bis!")
+    
+    async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle regular text messages"""
+        user_id = update.effective_user.id
+        message_text = update.message.text
+        
+        # Check if waiting for 10bis OTP
+        if user_id in self.tenbis_auth_states and self.tenbis_auth_states[user_id].get('waiting_for_otp'):
+            handler = self.tenbis_auth_states[user_id]['handler']
+            
+            # Verify OTP
+            success, message = await handler.authenticate(email=None, otp=message_text.strip())
+            
+            if success:
+                # Clear auth state
+                self.tenbis_auth_states[user_id]['waiting_for_otp'] = False
+            
+            await update.message.reply_text(message)
+            return
+        
+        # Original message handling
+        await update.message.reply_text(
+            "אני לא בטוח איך לענות על זה 🤔\n"
+            "נסה להשתמש ב-/help או /menu לראות מה אני יכול לעשות!"
+        )
 
 
 def main():
