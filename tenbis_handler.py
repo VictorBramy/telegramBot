@@ -658,7 +658,7 @@ h1 {{
 <script>
 // Store all barcodes data
 const barcodes = [
-{barcodes_js_array.rstrip(',\n')}
+{barcodes_js_array.rstrip(', ').rstrip()}
 ];
 
 let currentIndex = 0;
