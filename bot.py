@@ -2508,9 +2508,8 @@ class TelegramBot:
         # Check if user is logged in
         if not handler.load_session():
             await update.message.reply_text(
-                "❌ **אין אימות פעיל**\n\n"
-                "תחילה השתמש ב-/tenbis_login כדי להתחבר.",
-                parse_mode='Markdown'
+                "❌ אין אימות פעיל\n\n"
+                "תחילה השתמש ב-/tenbis_login כדי להתחבר."
             )
             return
         
@@ -2593,9 +2592,8 @@ class TelegramBot:
         # Check if user is logged in
         if not handler.load_session():
             await update.message.reply_text(
-                "❌ **אין אימות פעיל**\n\n"
-                "תחילה השתמש ב-/tenbis_login כדי להתחבר.",
-                parse_mode='Markdown'
+                "❌ אין אימות פעיל\n\n"
+                "תחילה השתמש ב-/tenbis_login כדי להתחבר."
             )
             return
         
@@ -2608,7 +2606,7 @@ class TelegramBot:
                 pass
         
         # Show status: Connecting (0%)
-        status_msg = await update.message.reply_text("🔄 **[0%] מתחבר ל-10Bis...**", parse_mode='Markdown')
+        status_msg = await update.message.reply_text("🔄 [0%] מתחבר ל-10Bis...")
         
         try:
             success, message, vouchers = handler.get_vouchers(months_back)
@@ -2622,17 +2620,15 @@ class TelegramBot:
         
         # Show status: Found vouchers (25%)
         await status_msg.edit_text(
-            f"✅ **[25%] נמצאו {len(vouchers)} שוברים!**\n\n"
-            f"📝 יוצר קובץ HTML...",
-            parse_mode='Markdown'
+            f"✅ [25%] נמצאו {len(vouchers)} שוברים!\n\n"
+            f"📝 יוצר קובץ HTML..."
         )
         
         try:
             # Generate HTML content (50%)
             await status_msg.edit_text(
                 f"✅ נמצאו {len(vouchers)} שוברים!\n\n"
-                f"📝 **[50%] בונה גלריית ברקודים...**",
-                parse_mode='Markdown'
+                f"📝 [50%] בונה גלריית ברקודים..."
             )
             html_content = generate_html_report(vouchers, user_name)
             
@@ -2640,8 +2636,7 @@ class TelegramBot:
             await status_msg.edit_text(
                 f"✅ נמצאו {len(vouchers)} שוברים!\n"
                 f"✅ קובץ HTML נוצר!\n\n"
-                f"📦 **[70%] מכין להורדה...**",
-                parse_mode='Markdown'
+                f"📦 [70%] מכין להורדה..."
             )
             
             # Create file in memory (85%)
@@ -2653,44 +2648,41 @@ class TelegramBot:
             await status_msg.edit_text(
                 f"✅ נמצאו {len(vouchers)} שוברים!\n"
                 f"✅ קובץ HTML נוצר!\n\n"
-                f"⬆️ **[90%] מעלה קובץ...**",
-                parse_mode='Markdown'
+                f"⬆️ [90%] מעלה קובץ..."
             )
             
             # Send file
             total_amount = sum(float(v['amount']) for v in vouchers)
+            today_str = date.today().strftime('%d/%m/%Y')
             await update.message.reply_document(
                 document=html_bytes,
                 filename=html_bytes.name,
-                caption=f"🎫 **דוח שוברי 10Bis**\n\n"
-                       f"📊 **סה\"כ שוברים:** {len(vouchers)}\n"
-                       f"💰 **סה\"כ סכום:** {total_amount} ₪\n"
-                       f"📅 **תאריך:** {date.today().strftime('%d/%m/%Y')}\n"
-                       f"👤 **עבור:** {user_name}\n\n"
-                       f"📱 **פתח בדפדפן לצפייה אינטראקטיבית!**\n"
+                caption=f"🎫 דוח שוברי 10Bis\n\n"
+                       f"📊 סה\"כ שוברים: {len(vouchers)}\n"
+                       f"💰 סה\"כ סכום: {total_amount} ₪\n"
+                       f"📅 תאריך: {today_str}\n"
+                       f"👤 עבור: {user_name}\n\n"
+                       f"📱 פתח בדפדפן לצפייה אינטראקטיבית!\n"
                        f"🖼️ גלריית ברקודים\n"
                        f"📸 לחיצה על ברקוד לסריקה מהירה\n"
-                       f"⌨️ ניווט עם חצים במקלדת",
-                parse_mode='Markdown'
+                       f"⌨️ ניווט עם חצים במקלדת"
             )
             
             # Update final status (100%)
             await status_msg.edit_text(
-                f"✅ **[100%] הקובץ נשלח בהצלחה!**\n\n"
-                f"📄 **שם קובץ:** `{html_bytes.name}`\n"
-                f"📊 **{len(vouchers)} שוברים פעילים**\n"
-                f"💰 **סה\"כ: {total_amount} ₪**\n\n"
-                f"💡 **טיפ:** הורד את הקובץ ופתח בדפדפן!",
-                parse_mode='Markdown'
+                f"✅ [100%] הקובץ נשלח בהצלחה!\n\n"
+                f"📄 שם קובץ: {html_bytes.name}\n"
+                f"📊 {len(vouchers)} שוברים פעילים\n"
+                f"💰 סה\"כ: {total_amount} ₪\n\n"
+                f"💡 טיפ: הורד את הקובץ ופתח בדפדפן!"
             )
             
         except Exception as e:
             logger.error(f"Error generating HTML: {e}")
             await status_msg.edit_text(
-                f"❌ **שגיאה ביצירת קובץ HTML**\n\n"
-                f"❗ **שגיאה:** `{str(e)}`\n\n"
-                f"🔄 נסה שוב מאוחר יותר",
-                parse_mode='Markdown'
+                f"❌ שגיאה ביצירת קובץ HTML\n\n"
+                f"❗ שגיאה: {str(e)}\n\n"
+                f"🔄 נסה שוב מאוחר יותר"
             )
     
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
