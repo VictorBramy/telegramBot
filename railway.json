@@ -3,7 +3,7 @@
     "commands": ["pip install --no-cache-dir --timeout=300 -r requirements.txt"]
   },
   "deploy": {
-    "startCommand": "python bot_minimal.py",
+    "startCommand": "python bot.py",
     "restartPolicyType": "on_failure"
   },
   "environment": {
