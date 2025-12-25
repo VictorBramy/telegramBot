@@ -2505,6 +2505,15 @@ class TelegramBot:
         
         handler = self.tenbis_handlers[user_id]
         
+        # Check if user is logged in
+        if not handler.load_session():
+            await update.message.reply_text(
+                "❌ **אין אימות פעיל**\n\n"
+                "תחילה השתמש ב-/tenbis_login כדי להתחבר.",
+                parse_mode='Markdown'
+            )
+            return
+        
         # Get months back (default 12)
         months_back = 12
         if context.args:
@@ -2515,7 +2524,11 @@ class TelegramBot:
         
         await update.message.reply_text("🔍 מחפש שוברים פעילים... אנא המתן...")
         
-        success, message, vouchers = handler.get_vouchers(months_back)
+        try:
+            success, message, vouchers = handler.get_vouchers(months_back)
+        except Exception as e:
+            await update.message.reply_text(f"❌ שגיאה בחיבור: {str(e)}")
+            return
         
         await update.message.reply_text(message, parse_mode='Markdown')
         
@@ -2577,6 +2590,15 @@ class TelegramBot:
         
         handler = self.tenbis_handlers[user_id]
         
+        # Check if user is logged in
+        if not handler.load_session():
+            await update.message.reply_text(
+                "❌ **אין אימות פעיל**\n\n"
+                "תחילה השתמש ב-/tenbis_login כדי להתחבר.",
+                parse_mode='Markdown'
+            )
+            return
+        
         # Get months back (default 12)
         months_back = 12
         if context.args:
@@ -2588,7 +2610,11 @@ class TelegramBot:
         # Show status: Connecting (0%)
         status_msg = await update.message.reply_text("🔄 **[0%] מתחבר ל-10Bis...**", parse_mode='Markdown')
         
-        success, message, vouchers = handler.get_vouchers(months_back)
+        try:
+            success, message, vouchers = handler.get_vouchers(months_back)
+        except Exception as e:
+            await status_msg.edit_text(f"❌ שגיאה בחיבור: {str(e)}")
+            return
         
         if not success or not vouchers:
             await status_msg.edit_text(f"❌ {message}")
