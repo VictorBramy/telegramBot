@@ -331,15 +331,18 @@ def generate_html_report(vouchers: List[Dict], user_name: str = "User") -> str:
         )
         
         # Generate gallery item HTML
+        img_url = voucher['barcode_img_url']
         gallery_data += f"""
             <div class="gallery-item" onclick="openBarcode({count - 1})">
-                <img src="{voucher['barcode_img_url']}" alt="Barcode {count}">
+                <img src="{img_url}" alt="Barcode {count}">
                 <div class="gallery-label">#{count}</div>
             </div>
         """
         
         # Generate JavaScript array item
-        barcodes_js_array += f"""            {{img: "{voucher['barcode_img_url']}", number: "{voucher['barcode_number']}"}},
+        img_url = voucher['barcode_img_url']
+        barcode_num = voucher['barcode_number']
+        barcodes_js_array += f"""            {{img: "{img_url}", number: "{barcode_num}"}},
 """
     
     # Complete HTML page
