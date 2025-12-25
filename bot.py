@@ -2585,8 +2585,8 @@ class TelegramBot:
             except ValueError:
                 pass
         
-        # Show status: Connecting
-        status_msg = await update.message.reply_text("🔄 **מתחבר ל-10Bis...**", parse_mode='Markdown')
+        # Show status: Connecting (0%)
+        status_msg = await update.message.reply_text("🔄 **[0%] מתחבר ל-10Bis...**", parse_mode='Markdown')
         
         success, message, vouchers = handler.get_vouchers(months_back)
         
@@ -2594,31 +2594,40 @@ class TelegramBot:
             await status_msg.edit_text(f"❌ {message}")
             return
         
-        # Show status: Generating HTML
-        await status_msg.edit_text(f"✅ נמצאו {len(vouchers)} שוברים!\n\n📝 **יוצר קובץ HTML...**", parse_mode='Markdown')
+        # Show status: Found vouchers (25%)
+        await status_msg.edit_text(
+            f"✅ **[25%] נמצאו {len(vouchers)} שוברים!**\n\n"
+            f"📝 יוצר קובץ HTML...",
+            parse_mode='Markdown'
+        )
         
         try:
-            # Generate HTML content
+            # Generate HTML content (50%)
+            await status_msg.edit_text(
+                f"✅ נמצאו {len(vouchers)} שוברים!\n\n"
+                f"📝 **[50%] בונה גלריית ברקודים...**",
+                parse_mode='Markdown'
+            )
             html_content = generate_html_report(vouchers, user_name)
             
-            # Show status: Preparing file
+            # Show status: HTML created (70%)
             await status_msg.edit_text(
                 f"✅ נמצאו {len(vouchers)} שוברים!\n"
                 f"✅ קובץ HTML נוצר!\n\n"
-                f"📦 **מכין להורדה...**",
+                f"📦 **[70%] מכין להורדה...**",
                 parse_mode='Markdown'
             )
             
-            # Create file in memory
+            # Create file in memory (85%)
             from io import BytesIO
             html_bytes = BytesIO(html_content.encode('utf-8'))
             html_bytes.name = f"10bis_vouchers_{date.today().strftime('%d-%b-%Y')}.html"
             
-            # Show status: Uploading
+            # Show status: Uploading (90%)
             await status_msg.edit_text(
                 f"✅ נמצאו {len(vouchers)} שוברים!\n"
                 f"✅ קובץ HTML נוצר!\n\n"
-                f"⬆️ **מעלה קובץ...**",
+                f"⬆️ **[90%] מעלה קובץ...**",
                 parse_mode='Markdown'
             )
             
@@ -2639,9 +2648,9 @@ class TelegramBot:
                 parse_mode='Markdown'
             )
             
-            # Update final status
+            # Update final status (100%)
             await status_msg.edit_text(
-                f"✅ **הקובץ נשלח בהצלחה!**\n\n"
+                f"✅ **[100%] הקובץ נשלח בהצלחה!**\n\n"
                 f"📄 **שם קובץ:** `{html_bytes.name}`\n"
                 f"📊 **{len(vouchers)} שוברים פעילים**\n"
                 f"💰 **סה\"כ: {total_amount} ₪**\n\n"
