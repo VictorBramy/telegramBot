@@ -758,8 +758,8 @@ document.addEventListener('DOMContentLoaded', function() {{
     <div class="container">
         <div class="summary">
             <h2>סיכום</h2>
-            <p><strong>סה"כ שוברים:</strong> {count}</p>
-            <p><strong>סה"כ סכום:</strong> {total_amount} ₪</p>
+            <p><strong>סה״כ שוברים:</strong> {count}</p>
+            <p><strong>סה״כ סכום:</strong> {total_amount} ₪</p>
             <p><strong>נוצר עבור:</strong> {user_name}</p>
             <p><strong>תאריך:</strong> {today_date}</p>
         </div>
