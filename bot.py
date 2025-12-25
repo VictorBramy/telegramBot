@@ -79,7 +79,7 @@ except Exception as e:
 # Import 10bis handler module
 TENBIS_AVAILABLE = False
 try:
-    from tenbis_handler import TenbisHandler, format_voucher_message
+    from tenbis_handler import TenbisHandler, format_voucher_message, generate_html_report
     TENBIS_AVAILABLE = True
     logger.info("10bis handler module loaded successfully")
 except ImportError as e:
@@ -169,6 +169,7 @@ class TelegramBot:
             self.application.add_handler(CommandHandler("tenbis_login", self.tenbis_login_command))
             self.application.add_handler(CommandHandler("tenbis_vouchers", self.tenbis_vouchers_command))
             self.application.add_handler(CommandHandler("tenbis_logout", self.tenbis_logout_command))
+            self.application.add_handler(CommandHandler("tenbis_html", self.tenbis_html_command))
         
         # Callback query handler for inline keyboards
         self.application.add_handler(CallbackQueryHandler(self.button_callback))
@@ -376,6 +377,7 @@ class TelegramBot:
                 keyboard = [
                     [InlineKeyboardButton("🔐 התחבר לחשבון", callback_data='tenbis_login_demo')],
                     [InlineKeyboardButton("🎫 הצג שוברים", callback_data='tenbis_vouchers_demo')],
+                    [InlineKeyboardButton("� הורד קובץ HTML", callback_data='tenbis_html_demo')],
                     [InlineKeyboardButton("📋 הוראות שימוש", callback_data='tenbis_help')],
                     [InlineKeyboardButton("👋 התנתק", callback_data='tenbis_logout_demo')],
                     [InlineKeyboardButton("🔙 חזרה לתפריט ראשי", callback_data='main_menu')]
@@ -385,6 +387,7 @@ class TelegramBot:
                     "🍔 **שוברי 10Bis**\n\n"
                     "🔐 התחבר לחשבון 10Bis שלך\n"
                     "🎫 צפה בכל השוברים הפעילים\n"
+                    "📄 הורד קובץ HTML אינטראקטיבי\n"
                     "📸 קבל ברקודים לסריקה\n"
                     "💰 סיכום סכומים\n"
                     "💾 שמירת session אוטומטית\n\n"
@@ -739,7 +742,9 @@ class TelegramBot:
                 "• סכום כולל\n"
                 "• פירוט כל שובר\n"
                 "• תמונת ברקוד לסריקה\n\n"
-                "💡 **טיפ:** התחל עם /tenbis_vouchers לראות הכל",
+                "� **רוצה קובץ HTML?**\n"
+                "השתמש ב-`/tenbis_html` לקובץ אינטראקטיבי!\n\n"
+                "�💡 **טיפ:** התחל עם /tenbis_vouchers לראות הכל",
                 parse_mode='Markdown'
             )
         
@@ -772,6 +777,26 @@ class TelegramBot:
                 "⚠️ **לאחר התנתקות:**\n"
                 "תצטרך להתחבר שוב עם `/tenbis_login`\n\n"
                 "🔒 **אבטחה:** מומלץ להתנתק אם משתמש במכשיר משותף",
+                parse_mode='Markdown'
+            )
+        
+        elif query.data == 'tenbis_html_demo':
+            await query.edit_message_text(
+                "📄 **הורדת קובץ HTML אינטראקטיבי**\n\n"
+                "**שימוש:** `/tenbis_html [חודשים]`\n\n"
+                "🔹 **דוגמאות:**\n"
+                "• `/tenbis_html` - 12 חודשים\n"
+                "• `/tenbis_html 6` - 6 חודשים\n"
+                "• `/tenbis_html 24` - שנתיים\n\n"
+                "✨ **תכונות הקובץ:**\n"
+                "• 🖼️ גלריית ברקודים אינטראקטיבית\n"
+                "• 📱 ממשק ידידותי לנייד\n"
+                "• 🔍 לחיצה על ברקוד לסריקה מהירה\n"
+                "• ⌨️ ניווט עם חצי מקלדת\n"
+                "• 📊 סיכום מלא של כל השוברים\n"
+                "• 💾 עובד גם בלי אינטרנט!\n\n"
+                "💡 **טיפ:** הורד את הקובץ ופתח בדפדפן בנייד!\n"
+                "📸 תוכל להראות ברקודים בקופה בקליק אחד",
                 parse_mode='Markdown'
             )
         
@@ -2534,6 +2559,104 @@ class TelegramBot:
             del self.tenbis_auth_states[user_id]
         
         await update.message.reply_text("✅ התנתקת בהצלחה מ-10Bis!")
+    
+    async def tenbis_html_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /tenbis_html command - Generate and send HTML report"""
+        if not TENBIS_AVAILABLE:
+            await update.message.reply_text("❌ 10bis module not available")
+            return
+        
+        user_id = update.effective_user.id
+        user_name = update.effective_user.first_name
+        
+        logger.info(f"📄 /tenbis_html - משתמש: {user_name} | ID: {user_id}")
+        
+        # Check if handler exists
+        if user_id not in self.tenbis_handlers:
+            self.tenbis_handlers[user_id] = TenbisHandler(user_id)
+        
+        handler = self.tenbis_handlers[user_id]
+        
+        # Get months back (default 12)
+        months_back = 12
+        if context.args:
+            try:
+                months_back = int(context.args[0])
+            except ValueError:
+                pass
+        
+        # Show status: Connecting
+        status_msg = await update.message.reply_text("🔄 **מתחבר ל-10Bis...**", parse_mode='Markdown')
+        
+        success, message, vouchers = handler.get_vouchers(months_back)
+        
+        if not success or not vouchers:
+            await status_msg.edit_text(f"❌ {message}")
+            return
+        
+        # Show status: Generating HTML
+        await status_msg.edit_text(f"✅ נמצאו {len(vouchers)} שוברים!\n\n📝 **יוצר קובץ HTML...**", parse_mode='Markdown')
+        
+        try:
+            # Generate HTML content
+            html_content = generate_html_report(vouchers, user_name)
+            
+            # Show status: Preparing file
+            await status_msg.edit_text(
+                f"✅ נמצאו {len(vouchers)} שוברים!\n"
+                f"✅ קובץ HTML נוצר!\n\n"
+                f"📦 **מכין להורדה...**",
+                parse_mode='Markdown'
+            )
+            
+            # Create file in memory
+            from io import BytesIO
+            html_bytes = BytesIO(html_content.encode('utf-8'))
+            html_bytes.name = f"10bis_vouchers_{date.today().strftime('%d-%b-%Y')}.html"
+            
+            # Show status: Uploading
+            await status_msg.edit_text(
+                f"✅ נמצאו {len(vouchers)} שוברים!\n"
+                f"✅ קובץ HTML נוצר!\n\n"
+                f"⬆️ **מעלה קובץ...**",
+                parse_mode='Markdown'
+            )
+            
+            # Send file
+            total_amount = sum(float(v['amount']) for v in vouchers)
+            await update.message.reply_document(
+                document=html_bytes,
+                filename=html_bytes.name,
+                caption=f"🎫 **דוח שוברי 10Bis**\n\n"
+                       f"📊 **סה\"כ שוברים:** {len(vouchers)}\n"
+                       f"💰 **סה\"כ סכום:** {total_amount} ₪\n"
+                       f"📅 **תאריך:** {date.today().strftime('%d/%m/%Y')}\n"
+                       f"👤 **עבור:** {user_name}\n\n"
+                       f"📱 **פתח בדפדפן לצפייה אינטראקטיבית!**\n"
+                       f"🖼️ גלריית ברקודים\n"
+                       f"📸 לחיצה על ברקוד לסריקה מהירה\n"
+                       f"⌨️ ניווט עם חצים במקלדת",
+                parse_mode='Markdown'
+            )
+            
+            # Update final status
+            await status_msg.edit_text(
+                f"✅ **הקובץ נשלח בהצלחה!**\n\n"
+                f"📄 **שם קובץ:** `{html_bytes.name}`\n"
+                f"📊 **{len(vouchers)} שוברים פעילים**\n"
+                f"💰 **סה\"כ: {total_amount} ₪**\n\n"
+                f"💡 **טיפ:** הורד את הקובץ ופתח בדפדפן!",
+                parse_mode='Markdown'
+            )
+            
+        except Exception as e:
+            logger.error(f"Error generating HTML: {e}")
+            await status_msg.edit_text(
+                f"❌ **שגיאה ביצירת קובץ HTML**\n\n"
+                f"❗ **שגיאה:** `{str(e)}`\n\n"
+                f"🔄 נסה שוב מאוחר יותר",
+                parse_mode='Markdown'
+            )
     
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle regular text messages"""
