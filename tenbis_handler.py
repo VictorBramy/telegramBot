@@ -680,7 +680,7 @@ function showCurrentBarcode() {{
     
     modalImg.src = barcode.img;
     modalNumber.textContent = barcode.number;
-    modalCounter.textContent = `שובר ${{currentIndex + 1}} מתוך ${{barcodes.length}}`;
+    modalCounter.textContent = 'שובר ' + (currentIndex + 1) + ' מתוך ' + barcodes.length;
     
     document.getElementById('prevBtn').style.display = currentIndex > 0 ? 'flex' : 'none';
     document.getElementById('nextBtn').style.display = currentIndex < barcodes.length - 1 ? 'flex' : 'none';
