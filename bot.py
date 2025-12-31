@@ -87,6 +87,17 @@ except ImportError as e:
 except Exception as e:
     logger.error(f"Failed to load 10bis handler: {e}")
 
+# Import finance handler module
+FINANCE_AVAILABLE = False
+try:
+    from finance_handler import format_index_report, test_symbol, get_stock_info
+    FINANCE_AVAILABLE = True
+    logger.info("Finance handler module loaded successfully")
+except ImportError as e:
+    logger.warning(f"Finance handler not available: {e}")
+except Exception as e:
+    logger.error(f"Failed to load finance handler: {e}")
+
 # Create separate logger for user activity only
 user_logger = logging.getLogger("user_activity")
 user_handler = logging.FileHandler('user_activity.log', encoding='utf-8')
@@ -171,6 +182,11 @@ class TelegramBot:
             self.application.add_handler(CommandHandler("tenbis_logout", self.tenbis_logout_command))
             self.application.add_handler(CommandHandler("tenbis_html", self.tenbis_html_command))
         
+        # Finance commands (if available)
+        if FINANCE_AVAILABLE:
+            self.application.add_handler(CommandHandler("finance", self.finance_command))
+            self.application.add_handler(CommandHandler("financestock", self.finance_stock_command))
+        
         # Callback query handler for inline keyboards
         self.application.add_handler(CallbackQueryHandler(self.button_callback))
         
@@ -244,6 +260,10 @@ class TelegramBot:
 /getindicator - קבלת אינדיקטור טכני
 /indicators - רשימת אינדיקטורים
 
+� **מדד פיננסי:**
+/finance - מדד הפיננסים הישראלי
+/financestock <סמל> - בדיקת מניה ישראלית
+
 🔹 **דוגמאות:**
 /locate 8.8.8.8
 /scan google.com
@@ -251,6 +271,8 @@ class TelegramBot:
 /newalert BTC/USDT PRICE ABOVE 50000
 /getprice BTC/USDT
 /tenbis_login user@email.com
+/finance
+/financestock PHOE.TA
 
 פשוט שלח לי הודעה ואני אענה לך!
 """
@@ -268,6 +290,7 @@ class TelegramBot:
             [InlineKeyboardButton("🔍 כלי רשת", callback_data='network_tools')],
             [InlineKeyboardButton("📈 ניתוח מניות", callback_data='stock_tools')],
             [InlineKeyboardButton("💰 התראות קריפטו", callback_data='crypto_tools')],
+            [InlineKeyboardButton("💹 מדד פיננסי ישראלי", callback_data='finance_tools')],
             [InlineKeyboardButton("🍔 שוברי 10Bis", callback_data='tenbis_tools')],
             [InlineKeyboardButton("⚡ דוגמאות מהירות", callback_data='quick_examples')],
             [InlineKeyboardButton("❓ עזרה ומידע", callback_data='help_info')],
@@ -405,6 +428,36 @@ class TelegramBot:
                     ]])
                 )
         
+        elif query.data == 'finance_tools':
+            if FINANCE_AVAILABLE:
+                # Finance submenu
+                keyboard = [
+                    [InlineKeyboardButton("📊 מדד הפיננסים", callback_data='finance_index')],
+                    [InlineKeyboardButton("🔍 בדיקת מניה", callback_data='finance_stock_demo')],
+                    [InlineKeyboardButton("📋 עזרה", callback_data='finance_help')],
+                    [InlineKeyboardButton("🔙 חזרה לתפריט ראשי", callback_data='main_menu')]
+                ]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                await query.edit_message_text(
+                    "💹 **מדד הפיננסים הישראלי**\n\n"
+                    "📊 מעקב בזמן אמת אחר מדד הפיננסים\n"
+                    "💰 מחירי מניות עדכניים\n"
+                    "📈 שינויים אחוזיים\n"
+                    "🏦 כל המניות הפיננסיות המובילות\n\n"
+                    "בחר פעולה:",
+                    reply_markup=reply_markup,
+                    parse_mode='Markdown'
+                )
+            else:
+                await query.edit_message_text(
+                    "❌ **שירות Finance לא זמין כרגע**\n\n"
+                    "חסרים חבילות נדרשות לשירות Finance.\n"
+                    "אנא פנה למפתח הבוט לעדכון.",
+                    reply_markup=InlineKeyboardMarkup([[
+                        InlineKeyboardButton("🔙 חזרה לתפריט ראשי", callback_data='main_menu')
+                    ]])
+                )
+        
         elif query.data == 'scan_menu':
             # Port scanning submenu with different scan types
             keyboard = [
@@ -463,7 +516,11 @@ class TelegramBot:
         elif query.data == 'main_menu':
             keyboard = [
                 [InlineKeyboardButton("🔍 כלי רשת", callback_data='network_tools')],
-                [InlineKeyboardButton("📊 דוגמאות מהירות", callback_data='quick_examples')],
+                [InlineKeyboardButton("� ניתוח מניות", callback_data='stock_tools')],
+                [InlineKeyboardButton("💰 התראות קריפטו", callback_data='crypto_tools')],
+                [InlineKeyboardButton("💹 מדד פיננסי ישראלי", callback_data='finance_tools')],
+                [InlineKeyboardButton("🍔 שוברי 10Bis", callback_data='tenbis_tools')],
+                [InlineKeyboardButton("⚡ דוגמאות מהירות", callback_data='quick_examples')],
                 [InlineKeyboardButton("❓ עזרה ומידע", callback_data='help_info')],
                 [InlineKeyboardButton("📞 יצירת קשר", callback_data='contact')]
             ]
@@ -472,6 +529,52 @@ class TelegramBot:
                 "🎯 **תפריט ראשי**\n\n"
                 "בחר אפשרות:",
                 reply_markup=reply_markup
+            )
+        
+        # Finance callbacks
+        elif query.data == 'finance_index':
+            await query.answer("טוען נתוני מדד...")
+            report = format_index_report()
+            await query.edit_message_text(
+                report,
+                parse_mode='Markdown',
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("🔄 רענן", callback_data='finance_index'),
+                    InlineKeyboardButton("🔙 חזרה", callback_data='finance_tools')
+                ]])
+            )
+        
+        elif query.data == 'finance_stock_demo':
+            await query.edit_message_text(
+                "🔍 **בדיקת מניה**\n\n"
+                "לבדיקת מחיר מניה ספציפית:\n\n"
+                "**שימוש:**\n"
+                "`/financestock PHOE.TA`\n"
+                "`/financestock LUMI.TA`\n\n"
+                "**דוגמאות:**\n"
+                "• `/financestock PHOE.TA` - פניקס\n"
+                "• `/financestock POLI.TA` - פועלים\n"
+                "• `/financestock LUMI.TA` - לאומי\n",
+                parse_mode='Markdown',
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("🔙 חזרה", callback_data='finance_tools')
+                ]])
+            )
+        
+        elif query.data == 'finance_help':
+            await query.edit_message_text(
+                "📋 **עזרה - מדד פיננסי**\n\n"
+                "**פקודות זמינות:**\n"
+                "• `/finance` - הצגת מדד הפיננסים\n"
+                "• `/financestock <סמל>` - מידע על מניה\n\n"
+                "**מניות במדד:**\n"
+                "PHOE.TA, POLI.TA, LUMI.TA, MZTF.TA,\n"
+                "DSCT.TA, HARL.TA, MNRA.TA, FIBI.TA,\n"
+                "CLIS.TA, MGDL.TA, FIBIH.TA\n",
+                parse_mode='Markdown',
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("🔙 חזרה", callback_data='finance_tools')
+                ]])
             )
         
         # Detailed scan type help
@@ -2685,6 +2788,76 @@ class TelegramBot:
                 f"❌ שגיאה ביצירת קובץ HTML\n\n"
                 f"❗ שגיאה: {str(e)}\n\n"
                 f"🔄 נסה שוב מאוחר יותר"
+            )
+    
+    async def finance_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /finance command - show Israeli finance index"""
+        user_name = update.effective_user.first_name
+        user_id = update.effective_user.id
+        username = update.effective_user.username or "ללא שם משתמש"
+        
+        logger.info(f"💹 /finance - משתמש: {user_name} (@{username}) | ID: {user_id}")
+        user_logger.info(f"💹 /finance - משתמש: {user_name} (@{username}) | ID: {user_id}")
+        
+        # Show loading message
+        status_msg = await update.message.reply_text("⏳ טוען נתוני מדד...")
+        
+        try:
+            # Get index report
+            report = format_index_report()
+            
+            # Send report
+            await status_msg.edit_text(report, parse_mode='Markdown')
+            
+        except Exception as e:
+            logger.error(f"Error in finance_command: {e}")
+            await status_msg.edit_text(
+                f"❌ **שגיאה בטעינת נתונים**\n\n"
+                f"לא ניתן לטעון את נתוני המדד כרגע.\n"
+                f"אנא נסה שוב מאוחר יותר."
+            )
+    
+    async def finance_stock_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /financestock command - show specific stock info"""
+        user_name = update.effective_user.first_name
+        user_id = update.effective_user.id
+        username = update.effective_user.username or "ללא שם משתמש"
+        
+        # Check if symbol provided
+        if not context.args:
+            await update.message.reply_text(
+                "❌ **חסר סמל מניה**\n\n"
+                "**שימוש:**\n"
+                "`/financestock <סמל מניה>`\n\n"
+                "**דוגמאות:**\n"
+                "• `/financestock PHOE.TA`\n"
+                "• `/financestock LUMI.TA`\n"
+                "• `/financestock POLI.TA`",
+                parse_mode='Markdown'
+            )
+            return
+        
+        symbol = context.args[0].upper()
+        
+        logger.info(f"🔍 /financestock {symbol} - משתמש: {user_name} (@{username}) | ID: {user_id}")
+        user_logger.info(f"🔍 /financestock {symbol} - משתמש: {user_name} (@{username}) | ID: {user_id}")
+        
+        # Show loading message
+        status_msg = await update.message.reply_text(f"⏳ בודק מניה {symbol}...")
+        
+        try:
+            # Get stock info
+            report = get_stock_info(symbol)
+            
+            # Send report
+            await status_msg.edit_text(report, parse_mode='Markdown')
+            
+        except Exception as e:
+            logger.error(f"Error in finance_stock_command: {e}")
+            await status_msg.edit_text(
+                f"❌ **שגיאה בטעינת נתונים**\n\n"
+                f"לא ניתן לטעון מידע עבור {symbol}.\n"
+                f"וודא שהסמל נכון ונסה שוב."
             )
     
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
