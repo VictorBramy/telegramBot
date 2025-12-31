@@ -170,8 +170,8 @@ def get_index_data() -> Tuple[float, float, float, Dict[str, Optional[float]], D
     except Exception as e:
         # Use last known closing prices from TASE
         live_prices = LAST_KNOWN_PRICES.copy()
-        # Calculate simulated opening based on typical daily change
-        opening_prices = {k: v * 0.995 for k, v in LAST_KNOWN_PRICES.items()}
+        # For closing prices, we don't have opening data - set same as closing
+        opening_prices = {k: v for k, v in LAST_KNOWN_PRICES.items()}
     
     # Calculate index values
     index_value = calculate_index_value(PORTFOLIO_WEIGHTS, live_prices)
@@ -200,13 +200,9 @@ def format_index_report() -> str:
         report = f"📊 **מדד הפיננסים הישראלי**\n\n"
         
         if using_last_known:
-            report += "📅 _מחירי סגירה יומיים - 30/12/2024_\n\n"
+            report += "📅 _מחיר סגירה 30/12/2024_\n\n"
         
-        report += f"💰 **שווי משוקלל:** {index_value:.2f} ₪\n"
-        
-        # Add emoji based on change direction
-        change_emoji = "📈" if index_change >= 0 else "📉"
-        report += f"{change_emoji} **שינוי:** {index_change:+.2f} ₪ ({index_change_pct:+.2f}%)\n\n"
+        report += f"💰 **שווי משוקלל:** {index_value:.2f} ₪\n\n"
         
         report += "📋 **מחירי מניות:**\n"
         
@@ -216,24 +212,16 @@ def format_index_report() -> str:
         for ticker, weight in sorted_stocks:
             price = live_prices.get(ticker)
             if price:
-                # Calculate change percentage for display
-                open_p = opening_prices.get(ticker, price)
-                if open_p and open_p > 0:
-                    pct_change = ((price - open_p) / open_p) * 100
-                else:
-                    pct_change = 0
-                
                 # Format ticker name
                 name = ticker.replace(".TA", "")
-                change_emoji = "🟢" if pct_change >= 0 else "🔴"
                 
-                report += f"{change_emoji} `{name}`: {price:.2f} ₪ ({pct_change:+.2f}%) - משקל: {weight}%\n"
+                report += f"• `{name}`: {price:.2f} ₪ - משקל: {weight}%\n"
             else:
                 name = ticker.replace(".TA", "")
                 report += f"⚫ `{name}`: לא זמין - משקל: {weight}%\n"
         
         if using_last_known:
-            report += f"\n📅 **תאריך:** מחירי סגירה 30/12/2024\n"
+            report += f"\n📅 **תאריך סגירה:** 30/12/2024\n"
             report += f"💡 **מקור:** בורסת תל אביב (TASE)"
         else:
             report += f"\n🕐 **עדכון:** בזמן אמת"
@@ -283,16 +271,10 @@ def get_stock_info(symbol: str) -> str:
             # Use last known price
             if symbol in LAST_KNOWN_PRICES:
                 price = LAST_KNOWN_PRICES[symbol]
-                open_price = price * 0.995
-                change = price - open_price
-                change_pct = (change / open_price * 100) if open_price != 0 else 0
-                
-                change_emoji = "📈" if change >= 0 else "📉"
                 
                 report = f"📊 **מידע על {symbol}**\n\n"
-                report += "📅 _מחירי סגירה 30/12/2024_\n\n"
+                report += "📅 _מחיר סגירה 30/12/2024_\n\n"
                 report += f"💰 **מחיר סגירה:** {price:.2f} ₪\n"
-                report += f"{change_emoji} **שינוי ביום המסחר:** {change:+.2f} ₪ ({change_pct:+.2f}%)\n"
                 report += f"\n💡 **מקור:** בורסת תל אביב (TASE)"
                 
                 return report
