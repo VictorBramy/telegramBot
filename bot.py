@@ -535,14 +535,22 @@ class TelegramBot:
         elif query.data == 'finance_index':
             await query.answer("טוען נתוני מדד...")
             report = format_index_report()
-            await query.edit_message_text(
-                report,
-                parse_mode='Markdown',
-                reply_markup=InlineKeyboardMarkup([[
-                    InlineKeyboardButton("🔄 רענן", callback_data='finance_index'),
-                    InlineKeyboardButton("🔙 חזרה", callback_data='finance_tools')
-                ]])
-            )
+            try:
+                await query.edit_message_text(
+                    report,
+                    parse_mode='Markdown',
+                    reply_markup=InlineKeyboardMarkup([[
+                        InlineKeyboardButton("🔄 רענן", callback_data='finance_index'),
+                        InlineKeyboardButton("🔙 חזרה", callback_data='finance_tools')
+                    ]])
+                )
+            except Exception as e:
+                # If message is the same, just answer the callback without error
+                if "message is not modified" in str(e).lower():
+                    await query.answer("הנתונים עדכניים ✓", show_alert=False)
+                else:
+                    logger.error(f"Error updating finance index: {e}")
+                    await query.answer("שגיאה בעדכון נתונים", show_alert=True)
         
         elif query.data == 'finance_stock_demo':
             await query.edit_message_text(
