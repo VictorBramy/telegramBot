@@ -8,6 +8,7 @@ import pandas as pd
 from typing import Dict, Optional, Tuple
 
 # Portfolio weights for Israeli financial sector index (in percentages)
+# Using TA.TLV format for Tel Aviv Stock Exchange
 PORTFOLIO_WEIGHTS = {
     "PHOE.TA": 12.67,   # פניקס
     "POLI.TA": 11.95,   # פועלים
@@ -20,6 +21,21 @@ PORTFOLIO_WEIGHTS = {
     "CLIS.TA": 5.50,    # כלל ביטוח
     "MGDL.TA": 4.94,    # מגדל ביטוח
     "FIBIH.TA": 3.00     # FIBI HOLDINGS (פיבי הולדינגס)
+}
+
+# Fallback to demo data if yfinance fails
+DEMO_PRICES = {
+    "PHOE.TA": 85.50,
+    "POLI.TA": 42.30,
+    "LUMI.TA": 38.80,
+    "MZTF.TA": 35.20,
+    "DSCT.TA": 65.40,
+    "HARL.TA": 28.90,
+    "MNRA.TA": 33.10,
+    "FIBI.TA": 48.70,
+    "CLIS.TA": 52.20,
+    "MGDL.TA": 31.50,
+    "FIBIH.TA": 24.80
 }
 
 def fetch_live_data(tickers: list, period: str = "5d") -> pd.DataFrame:
@@ -69,27 +85,43 @@ def get_index_data() -> Tuple[float, float, float, Dict[str, Optional[float]], D
     Returns:
         Tuple of (index_value, index_change, index_change_pct, live_prices, opening_prices)
     """
-    # Fetch live data
-    df = fetch_live_data(PORTFOLIO_WEIGHTS.keys())
-    
-    # Extract current and opening prices
-    live_prices = {}
-    opening_prices = {}
-    
-    for ticker in PORTFOLIO_WEIGHTS.keys():
-        try:
-            if ticker in df["Close"].columns:
-                price = df["Close"][ticker].iloc[-1]
-                live_prices[ticker] = float(price) if not pd.isna(price) else None
-                
-                open_price = df["Open"][ticker].iloc[-1]
-                opening_prices[ticker] = float(open_price) if not pd.isna(open_price) else None
-            else:
+    try:
+        # Try to fetch live data
+        df = fetch_live_data(PORTFOLIO_WEIGHTS.keys())
+        
+        # Extract current and opening prices
+        live_prices = {}
+        opening_prices = {}
+        
+        data_available = False
+        for ticker in PORTFOLIO_WEIGHTS.keys():
+            try:
+                if ticker in df["Close"].columns:
+                    price = df["Close"][ticker].iloc[-1]
+                    if not pd.isna(price):
+                        live_prices[ticker] = float(price)
+                        data_available = True
+                    else:
+                        live_prices[ticker] = None
+                    
+                    open_price = df["Open"][ticker].iloc[-1]
+                    opening_prices[ticker] = float(open_price) if not pd.isna(open_price) else None
+                else:
+                    live_prices[ticker] = None
+                    opening_prices[ticker] = None
+            except Exception:
                 live_prices[ticker] = None
                 opening_prices[ticker] = None
-        except Exception:
-            live_prices[ticker] = None
-            opening_prices[ticker] = None
+        
+        # If no data available, use demo prices
+        if not data_available:
+            raise Exception("No live data available")
+            
+    except Exception as e:
+        # Fallback to demo data
+        live_prices = DEMO_PRICES.copy()
+        # Simulate small changes for opening prices
+        opening_prices = {k: v * 0.995 for k, v in DEMO_PRICES.items()}
     
     # Calculate index values
     index_value = calculate_index_value(PORTFOLIO_WEIGHTS, live_prices)
@@ -111,8 +143,15 @@ def format_index_report() -> str:
     try:
         index_value, index_change, index_change_pct, live_prices, opening_prices = get_index_data()
         
+        # Check if using demo data
+        using_demo = all(live_prices.get(ticker) == DEMO_PRICES.get(ticker) for ticker in PORTFOLIO_WEIGHTS.keys())
+        
         # Build report
         report = f"📊 **מדד הפיננסים הישראלי**\n\n"
+        
+        if using_demo:
+            report += "⚠️ _נתוני דמו - Yahoo Finance לא זמין כרגע_\n\n"
+        
         report += f"💰 **שווי משוקלל:** {index_value:.2f} ₪\n"
         
         # Add emoji based on change direction
@@ -127,26 +166,26 @@ def format_index_report() -> str:
         for ticker, weight in sorted_stocks:
             price = live_prices.get(ticker)
             if price:
-                try:
-                    # Get additional info
-                    stock_info = yf.Ticker(ticker).info
-                    pct_change = stock_info.get("regularMarketChangePercent", 0)
-                    if pct_change is None:
-                        pct_change = 0
-                    
-                    # Format ticker name
-                    name = ticker.replace(".TA", "")
-                    change_emoji = "🟢" if pct_change >= 0 else "🔴"
-                    
-                    report += f"{change_emoji} `{name}`: {price:.2f} ₪ ({pct_change:+.2f}%) - משקל: {weight}%\n"
-                except Exception:
-                    name = ticker.replace(".TA", "")
-                    report += f"⚪ `{name}`: {price:.2f} ₪ - משקל: {weight}%\n"
+                # Calculate change percentage for display
+                open_p = opening_prices.get(ticker, price)
+                if open_p and open_p > 0:
+                    pct_change = ((price - open_p) / open_p) * 100
+                else:
+                    pct_change = 0
+                
+                # Format ticker name
+                name = ticker.replace(".TA", "")
+                change_emoji = "🟢" if pct_change >= 0 else "🔴"
+                
+                report += f"{change_emoji} `{name}`: {price:.2f} ₪ ({pct_change:+.2f}%) - משקל: {weight}%\n"
             else:
                 name = ticker.replace(".TA", "")
                 report += f"⚫ `{name}`: לא זמין - משקל: {weight}%\n"
         
-        report += f"\n🕐 **עדכון:** בזמן אמת"
+        if using_demo:
+            report += f"\n💡 **הערה:** נתונים אלו הם להדגמה בלבד"
+        else:
+            report += f"\n🕐 **עדכון:** בזמן אמת"
         
         return report
         
@@ -186,12 +225,28 @@ def get_stock_info(symbol: str) -> str:
         Formatted stock information
     """
     try:
-        ticker = yf.Ticker(symbol)
-        info = ticker.info
-        hist = ticker.history(period="5d")
+        # Try to get real data
+        hist = yf.download(symbol, period="5d", progress=False)
         
         if hist.empty:
-            return f"❌ לא נמצאו נתונים עבור {symbol}"
+            # Try demo data
+            if symbol in DEMO_PRICES:
+                price = DEMO_PRICES[symbol]
+                open_price = price * 0.995
+                change = price - open_price
+                change_pct = (change / open_price * 100) if open_price != 0 else 0
+                
+                change_emoji = "📈" if change >= 0 else "📉"
+                
+                report = f"📊 **מידע על {symbol}**\n\n"
+                report += "⚠️ _נתוני דמו - Yahoo Finance לא זמין_\n\n"
+                report += f"💰 **מחיר נוכחי:** {price:.2f} ₪\n"
+                report += f"{change_emoji} **שינוי:** {change:+.2f} ₪ ({change_pct:+.2f}%)\n"
+                report += f"\n💡 נתונים אלו הם להדגמה בלבד"
+                
+                return report
+            else:
+                return f"❌ לא נמצאו נתונים עבור {symbol}\n\n💡 נסה סמל אחר מהמדד"
         
         current_price = hist['Close'][-1]
         open_price = hist['Open'][-1]
@@ -212,11 +267,11 @@ def get_stock_info(symbol: str) -> str:
         report += f"📉 **נמוך:** {low_price:.2f} ₪\n"
         report += f"📦 **מחזור:** {volume:,.0f}\n"
         
-        # Add company name if available
-        if 'longName' in info:
-            report = f"🏢 **{info['longName']}**\n\n" + report
-        
         return report
         
     except Exception as e:
+        # Final fallback to demo
+        if symbol in DEMO_PRICES:
+            price = DEMO_PRICES[symbol]
+            return f"📊 **{symbol}**\n\n💰 מחיר (דמו): {price:.2f} ₪\n\n⚠️ Yahoo Finance לא זמין"
         return f"❌ **שגיאה:**\n{str(e)}"
