@@ -5,7 +5,12 @@ Calculates Israeli financial index values and analyzes stock prices
 
 import yfinance as yf
 import pandas as pd
+import warnings
 from typing import Dict, Optional, Tuple
+
+# Suppress yfinance warnings about missing data
+warnings.filterwarnings('ignore', category=FutureWarning)
+warnings.filterwarnings('ignore', message='.*delisted.*')
 
 # Portfolio weights for Israeli financial sector index (in percentages)
 # Using TA.TLV format for Tel Aviv Stock Exchange
@@ -51,16 +56,29 @@ def fetch_live_data(tickers: list, period: str = "1mo") -> pd.DataFrame:
         DataFrame with stock data
     """
     try:
+        # Suppress yfinance download messages
+        import sys
+        import io
+        old_stderr = sys.stderr
+        sys.stderr = io.StringIO()
+        
         data = yf.download(
             tickers=list(tickers),
             period=period,
             interval="1d",
             progress=False,
             auto_adjust=False,
-            threads=True
+            threads=True,
+            show_errors=False  # Don't show error messages
         )
+        
+        # Restore stderr
+        sys.stderr = old_stderr
+        
         return data
     except Exception as e:
+        # Restore stderr in case of exception
+        sys.stderr = old_stderr
         raise Exception(f"Failed to fetch data: {str(e)}")
 
 def calculate_index_value(weights: Dict[str, float], prices: Dict[str, float]) -> float:
