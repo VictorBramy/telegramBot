@@ -163,12 +163,12 @@ def get_index_data() -> Tuple[float, float, float, Dict[str, Optional[float]], D
                 live_prices[ticker] = None
                 opening_prices[ticker] = None
         
-        # If no data available, use demo prices
+        # If no real-time data available, use last known closing prices
         if not data_available:
             raise Exception("No live data available")
             
     except Exception as e:
-        # Use last known closing prices (manually maintained)
+        # Use last known closing prices from TASE
         live_prices = LAST_KNOWN_PRICES.copy()
         # Calculate simulated opening based on typical daily change
         opening_prices = {k: v * 0.995 for k, v in LAST_KNOWN_PRICES.items()}
