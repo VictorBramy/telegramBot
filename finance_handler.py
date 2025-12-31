@@ -23,19 +23,19 @@ PORTFOLIO_WEIGHTS = {
     "FIBIH.TA": 3.00     # FIBI HOLDINGS (פיבי הולדינגס)
 }
 
-# Fallback to demo data if yfinance fails
+# Fallback to demo data if yfinance fails - realistic Israeli stock prices
 DEMO_PRICES = {
-    "PHOE.TA": 85.50,
-    "POLI.TA": 42.30,
-    "LUMI.TA": 38.80,
-    "MZTF.TA": 35.20,
-    "DSCT.TA": 65.40,
-    "HARL.TA": 28.90,
-    "MNRA.TA": 33.10,
-    "FIBI.TA": 48.70,
-    "CLIS.TA": 52.20,
-    "MGDL.TA": 31.50,
-    "FIBIH.TA": 24.80
+    "PHOE.TA": 1250.00,   # פניקס - ~1,250 ש"ח
+    "POLI.TA": 520.00,    # פועלים - ~520 ש"ח
+    "LUMI.TA": 820.00,    # לאומי - ~820 ש"ח
+    "MZTF.TA": 720.00,    # מזרחי־טפחות - ~720 ש"ח
+    "DSCT.TA": 580.00,    # דיסקונט - ~580 ש"ח
+    "HARL.TA": 125.00,    # הראל - ~125 ש"ח
+    "MNRA.TA": 350.00,    # מנורה - ~350 ש"ח
+    "FIBI.TA": 480.00,    # הבינלאומי - ~480 ש"ח
+    "CLIS.TA": 195.00,    # כלל ביטוח - ~195 ש"ח
+    "MGDL.TA": 118.00,    # מגדל - ~118 ש"ח
+    "FIBIH.TA": 42.00     # פיבי הולדינגס - ~42 ש"ח
 }
 
 def fetch_live_data(tickers: list, period: str = "5d") -> pd.DataFrame:
