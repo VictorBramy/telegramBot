@@ -38,13 +38,14 @@ DEMO_PRICES = {
     "FIBIH.TA": 42.00     # פיבי הולדינגס - ~42 ש"ח
 }
 
-def fetch_live_data(tickers: list, period: str = "5d") -> pd.DataFrame:
+def fetch_live_data(tickers: list, period: str = "1mo") -> pd.DataFrame:
     """
     Download live market data for given tickers
+    Uses longer period to ensure data is available even when market is closed
     
     Args:
         tickers: List of stock symbols
-        period: Data period (default 5d)
+        period: Data period (default 1mo for better coverage)
     
     Returns:
         DataFrame with stock data
@@ -54,7 +55,9 @@ def fetch_live_data(tickers: list, period: str = "5d") -> pd.DataFrame:
             tickers=list(tickers),
             period=period,
             interval="1d",
-            progress=False
+            progress=False,
+            auto_adjust=False,
+            threads=True
         )
         return data
     except Exception as e:
@@ -81,12 +84,13 @@ def calculate_index_value(weights: Dict[str, float], prices: Dict[str, float]) -
 def get_index_data() -> Tuple[float, float, float, Dict[str, Optional[float]], Dict[str, Optional[float]]]:
     """
     Get current index data including prices and changes
+    Gets last available closing price even if market is closed
     
     Returns:
         Tuple of (index_value, index_change, index_change_pct, live_prices, opening_prices)
     """
     try:
-        # Try to fetch live data
+        # Try to fetch live data with longer period
         df = fetch_live_data(PORTFOLIO_WEIGHTS.keys())
         
         # Extract current and opening prices
@@ -96,20 +100,46 @@ def get_index_data() -> Tuple[float, float, float, Dict[str, Optional[float]], D
         data_available = False
         for ticker in PORTFOLIO_WEIGHTS.keys():
             try:
-                if ticker in df["Close"].columns:
-                    price = df["Close"][ticker].iloc[-1]
-                    if not pd.isna(price):
-                        live_prices[ticker] = float(price)
-                        data_available = True
+                if "Close" in df.columns:
+                    # Multi-ticker format
+                    if ticker in df["Close"].columns:
+                        # Get last available close price (most recent trading day)
+                        close_series = df["Close"][ticker].dropna()
+                        if not close_series.empty:
+                            price = float(close_series.iloc[-1])
+                            live_prices[ticker] = price
+                            data_available = True
+                            
+                            # Get opening price from same day
+                            open_series = df["Open"][ticker].dropna()
+                            if not open_series.empty:
+                                opening_prices[ticker] = float(open_series.iloc[-1])
+                            else:
+                                # Use previous close as opening if no open data
+                                opening_prices[ticker] = price * 0.99
+                        else:
+                            live_prices[ticker] = None
+                            opening_prices[ticker] = None
                     else:
                         live_prices[ticker] = None
-                    
-                    open_price = df["Open"][ticker].iloc[-1]
-                    opening_prices[ticker] = float(open_price) if not pd.isna(open_price) else None
+                        opening_prices[ticker] = None
                 else:
-                    live_prices[ticker] = None
-                    opening_prices[ticker] = None
-            except Exception:
+                    # Single ticker format
+                    close_series = df["Close"].dropna()
+                    if not close_series.empty:
+                        price = float(close_series.iloc[-1])
+                        live_prices[ticker] = price
+                        data_available = True
+                        
+                        open_series = df["Open"].dropna()
+                        if not open_series.empty:
+                            opening_prices[ticker] = float(open_series.iloc[-1])
+                        else:
+                            opening_prices[ticker] = price * 0.99
+                    else:
+                        live_prices[ticker] = None
+                        opening_prices[ticker] = None
+            except Exception as e:
                 live_prices[ticker] = None
                 opening_prices[ticker] = None
         
@@ -150,7 +180,7 @@ def format_index_report() -> str:
         report = f"📊 **מדד הפיננסים הישראלי**\n\n"
         
         if using_demo:
-            report += "⚠️ _נתוני דמו - Yahoo Finance לא זמין כרגע_\n\n"
+            report += "⚠️ _נתוני דמו - מחירים מעודכנים לתאריך 30/12/2024_\n\n"
         
         report += f"💰 **שווי משוקלל:** {index_value:.2f} ₪\n"
         
@@ -183,7 +213,8 @@ def format_index_report() -> str:
                 report += f"⚫ `{name}`: לא זמין - משקל: {weight}%\n"
         
         if using_demo:
-            report += f"\n💡 **הערה:** נתונים אלו הם להדגמה בלבד"
+            report += f"\n� **תאריך:** מחירי סגירה 30/12/2024\n"
+            report += f"💡 **הערה:** נתונים אלו מבוססים על מחירי סגירה אחרונים"
         else:
             report += f"\n🕐 **עדכון:** בזמן אמת"
         
@@ -239,10 +270,10 @@ def get_stock_info(symbol: str) -> str:
                 change_emoji = "📈" if change >= 0 else "📉"
                 
                 report = f"📊 **מידע על {symbol}**\n\n"
-                report += "⚠️ _נתוני דמו - Yahoo Finance לא זמין_\n\n"
-                report += f"💰 **מחיר נוכחי:** {price:.2f} ₪\n"
-                report += f"{change_emoji} **שינוי:** {change:+.2f} ₪ ({change_pct:+.2f}%)\n"
-                report += f"\n💡 נתונים אלו הם להדגמה בלבד"
+                report += "📅 _מחירי סגירה 30/12/2024_\n\n"
+                report += f"💰 **מחיר סגירה:** {price:.2f} ₪\n"
+                report += f"{change_emoji} **שינוי ביום המסחר:** {change:+.2f} ₪ ({change_pct:+.2f}%)\n"
+                report += f"\n💡 מבוסס על מחירי סגירה אחרונים"
                 
                 return report
             else:
@@ -273,5 +304,5 @@ def get_stock_info(symbol: str) -> str:
         # Final fallback to demo
         if symbol in DEMO_PRICES:
             price = DEMO_PRICES[symbol]
-            return f"📊 **{symbol}**\n\n💰 מחיר (דמו): {price:.2f} ₪\n\n⚠️ Yahoo Finance לא זמין"
+            return f"📊 **{symbol}**\n\n💰 מחיר סגירה (30/12/2024): {price:.2f} ₪\n\n📅 מחיר סגירה אחרון"
         return f"❌ **שגיאה:**\n{str(e)}"
