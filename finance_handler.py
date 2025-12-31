@@ -6,6 +6,8 @@ Calculates Israeli financial index values and analyzes stock prices
 import yfinance as yf
 import pandas as pd
 import warnings
+import json
+import os
 from typing import Dict, Optional, Tuple
 
 # Suppress yfinance warnings about missing data
@@ -44,6 +46,20 @@ LAST_KNOWN_PRICES = {
     "MGDL.TA": 118.00,    # מגדל - ~118 ש"ח
     "FIBIH.TA": 42.00     # פיבי הולדינגס - ~42 ש"ח
 }
+
+def load_previous_close() -> Dict[str, float]:
+    """Load previous day closing prices from JSON file"""
+    try:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        json_path = os.path.join(script_dir, 'finance_previous_close.json')
+        
+        if os.path.exists(json_path):
+            with open(json_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                return data.get('previous_close', {})
+    except Exception:
+        pass
+    return {}
 
 def fetch_live_data(tickers: list, period: str = "1mo") -> pd.DataFrame:
     """
@@ -170,8 +186,13 @@ def get_index_data() -> Tuple[float, float, float, Dict[str, Optional[float]], D
     except Exception as e:
         # Use last known closing prices from TASE
         live_prices = LAST_KNOWN_PRICES.copy()
-        # For closing prices, we don't have opening data - set same as closing
-        opening_prices = {k: v for k, v in LAST_KNOWN_PRICES.items()}
+        # Load previous day prices to calculate real change
+        previous_close = load_previous_close()
+        if previous_close:
+            opening_prices = previous_close
+        else:
+            # No previous data - set same as current
+            opening_prices = {k: v for k, v in LAST_KNOWN_PRICES.items()}
     
     # Calculate index values
     index_value = calculate_index_value(PORTFOLIO_WEIGHTS, live_prices)
@@ -202,9 +223,14 @@ def format_index_report() -> str:
         if using_last_known:
             report += "📅 _מחיר סגירה 30/12/2024_\n\n"
         
-        report += f"💰 **שווי משוקלל:** {index_value:.2f} ₪\n\n"
+        report += f"💰 **שווי משוקלל:** {index_value:.2f} ₪\n"
         
-        report += "📋 **מחירי מניות:**\n"
+        # Show change if available
+        if index_change != 0:
+            change_emoji = "📈" if index_change >= 0 else "📉"
+            report += f"{change_emoji} **שינוי יומי:** {index_change:+.2f} ₪ ({index_change_pct:+.2f}%)\n"
+        
+        report += "\n📋 **מחירי מניות:**\n"
         
         # Sort by weight (descending)
         sorted_stocks = sorted(PORTFOLIO_WEIGHTS.items(), key=lambda x: x[1], reverse=True)
@@ -212,10 +238,18 @@ def format_index_report() -> str:
         for ticker, weight in sorted_stocks:
             price = live_prices.get(ticker)
             if price:
-                # Format ticker name
-                name = ticker.replace(".TA", "")
-                
-                report += f"• `{name}`: {price:.2f} ₪ - משקל: {weight}%\n"
+                # Calculate change from previous day if available
+                prev_price = opening_prices.get(ticker, price)
+                if prev_price and prev_price != price:
+                    change = price - prev_price
+                    change_pct = (change / prev_price) * 100
+                    change_emoji = "🟢" if change >= 0 else "🔴"
+                    name = ticker.replace(".TA", "")
+                    report += f"{change_emoji} `{name}`: {price:.2f} ₪ ({change_pct:+.2f}%) - משקל: {weight}%\n"
+                else:
+                    # No change data
+                    name = ticker.replace(".TA", "")
+                    report += f"• `{name}`: {price:.2f} ₪ - משקל: {weight}%\n"
             else:
                 name = ticker.replace(".TA", "")
                 report += f"⚫ `{name}`: לא זמין - משקל: {weight}%\n"
@@ -264,6 +298,9 @@ def get_stock_info(symbol: str) -> str:
         Formatted stock information
     """
     try:
+        # Load previous close prices for change calculation
+        previous_close = load_previous_close()
+        
         # Try to get real data
         hist = yf.download(symbol, period="5d", progress=False)
         
@@ -273,8 +310,16 @@ def get_stock_info(symbol: str) -> str:
                 price = LAST_KNOWN_PRICES[symbol]
                 
                 report = f"📊 **מידע על {symbol}**\n\n"
-                report += "📅 _מחיר סגירה 30/12/2024_\n\n"
                 report += f"💰 **מחיר סגירה:** {price:.2f} ₪\n"
+                
+                # Add daily change if available
+                if symbol in previous_close:
+                    prev_price = previous_close[symbol]
+                    change = price - prev_price
+                    change_pct = (change / prev_price) * 100
+                    change_emoji = "🟢" if change >= 0 else "🔴"
+                    report += f"{change_emoji} **שינוי יומי:** {change:+.2f} ₪ ({change_pct:+.2f}%)\n"
+                
                 report += f"\n💡 **מקור:** בורסת תל אביב (TASE)"
                 
                 return report
@@ -306,5 +351,19 @@ def get_stock_info(symbol: str) -> str:
         # Final fallback to last known prices
         if symbol in LAST_KNOWN_PRICES:
             price = LAST_KNOWN_PRICES[symbol]
-            return f"📊 **{symbol}**\n\n💰 מחיר סגירה (30/12/2024): {price:.2f} ₪\n\n📅 **מקור:** בורסת תל אביב"
+            
+            report = f"📊 **{symbol}**\n\n"
+            report += f"💰 **מחיר סגירה:** {price:.2f} ₪\n"
+            
+            # Add daily change if available
+            previous_close = load_previous_close()
+            if symbol in previous_close:
+                prev_price = previous_close[symbol]
+                change = price - prev_price
+                change_pct = (change / prev_price) * 100
+                change_emoji = "🟢" if change >= 0 else "🔴"
+                report += f"{change_emoji} **שינוי יומי:** {change:+.2f} ₪ ({change_pct:+.2f}%)\n"
+            
+            report += f"\n💡 **מקור:** בורסת תל אביב"
+            return report
         return f"❌ **שגיאה:**\n{str(e)}"
