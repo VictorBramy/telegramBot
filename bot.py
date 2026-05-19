@@ -98,6 +98,17 @@ except ImportError as e:
 except Exception as e:
     logger.error(f"Failed to load finance handler: {e}")
 
+# Import TA-125 scanner module
+TA125_AVAILABLE = False
+try:
+    from ta125_scanner import scan_ta125_async, format_ta125_report
+    TA125_AVAILABLE = True
+    logger.info("TA-125 scanner module loaded successfully")
+except ImportError as e:
+    logger.warning(f"TA-125 scanner not available: {e}")
+except Exception as e:
+    logger.error(f"Failed to load TA-125 scanner: {e}")
+
 # Create separate logger for user activity only
 user_logger = logging.getLogger("user_activity")
 user_handler = logging.FileHandler('user_activity.log', encoding='utf-8')
@@ -187,6 +198,10 @@ class TelegramBot:
             self.application.add_handler(CommandHandler("finance", self.finance_command))
             self.application.add_handler(CommandHandler("financestock", self.finance_stock_command))
         
+        # TA-125 scanner command (if available)
+        if TA125_AVAILABLE:
+            self.application.add_handler(CommandHandler("ta125scan", self.ta125_scan_command))
+        
         # Callback query handler for inline keyboards
         self.application.add_handler(CallbackQueryHandler(self.button_callback))
         
@@ -273,6 +288,7 @@ class TelegramBot:
 /tenbis_login user@email.com
 /finance
 /financestock PHOE.TA
+/ta125scan
 
 פשוט שלח לי הודעה ואני אענה לך!
 """
@@ -291,6 +307,7 @@ class TelegramBot:
             [InlineKeyboardButton("📈 ניתוח מניות", callback_data='stock_tools')],
             [InlineKeyboardButton("💰 התראות קריפטו", callback_data='crypto_tools')],
             [InlineKeyboardButton("💹 מדד פיננסי ישראלי", callback_data='finance_tools')],
+            [InlineKeyboardButton("📊 סריקת תא-125 (3 ימים שליליים)", callback_data='ta125_scan')],
             [InlineKeyboardButton("🍔 שוברי 10Bis", callback_data='tenbis_tools')],
             [InlineKeyboardButton("⚡ דוגמאות מהירות", callback_data='quick_examples')],
             [InlineKeyboardButton("❓ עזרה ומידע", callback_data='help_info')],
@@ -516,9 +533,10 @@ class TelegramBot:
         elif query.data == 'main_menu':
             keyboard = [
                 [InlineKeyboardButton("🔍 כלי רשת", callback_data='network_tools')],
-                [InlineKeyboardButton("� ניתוח מניות", callback_data='stock_tools')],
+                [InlineKeyboardButton("📈 ניתוח מניות", callback_data='stock_tools')],
                 [InlineKeyboardButton("💰 התראות קריפטו", callback_data='crypto_tools')],
                 [InlineKeyboardButton("💹 מדד פיננסי ישראלי", callback_data='finance_tools')],
+                [InlineKeyboardButton("📊 סריקת תא-125 (3 ימים שליליים)", callback_data='ta125_scan')],
                 [InlineKeyboardButton("🍔 שוברי 10Bis", callback_data='tenbis_tools')],
                 [InlineKeyboardButton("⚡ דוגמאות מהירות", callback_data='quick_examples')],
                 [InlineKeyboardButton("❓ עזרה ומידע", callback_data='help_info')],
@@ -584,6 +602,59 @@ class TelegramBot:
                     InlineKeyboardButton("🔙 חזרה", callback_data='finance_tools')
                 ]])
             )
+        
+            await query.edit_message_text(
+                "📋 **עזרה - מדד פיננסי**\n\n"
+                "**פקודות זמינות:**\n"
+                "• `/finance` - הצגת מדד הפיננסים\n"
+                "• `/financestock <סמל>` - מידע על מניה\n\n"
+                "**מניות במדד:**\n"
+                "PHOE.TA, POLI.TA, LUMI.TA, MZTF.TA,\n"
+                "DSCT.TA, HARL.TA, MNRA.TA, FIBI.TA,\n"
+                "CLIS.TA, MGDL.TA, FIBIH.TA\n",
+                parse_mode='Markdown',
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("🔙 חזרה", callback_data='finance_tools')
+                ]])
+            )
+        
+        # TA-125 scanner callback
+        elif query.data == 'ta125_scan':
+            if TA125_AVAILABLE:
+                await query.edit_message_text(
+                    "⏳ **סורק מדד תא-125...**\n\n"
+                    "מוריד נתונים עבור ~125 מניות ובודק 3 ימי מסחר אחרונים.\n"
+                    "הסריקה עשויה לקחת כ-30-60 שניות, אנא המתן...",
+                    parse_mode='Markdown'
+                )
+                try:
+                    negative_stocks, total_scanned, failed_count = await scan_ta125_async()
+                    report = format_ta125_report(negative_stocks, total_scanned, failed_count)
+                    await query.edit_message_text(
+                        report,
+                        parse_mode='MarkdownV2',
+                        reply_markup=InlineKeyboardMarkup([
+                            [InlineKeyboardButton("🔄 סרוק שוב", callback_data='ta125_scan')],
+                            [InlineKeyboardButton("🔙 חזרה לתפריט", callback_data='main_menu')]
+                        ])
+                    )
+                except Exception as e:
+                    logger.error(f"Error in ta125_scan callback: {e}")
+                    await query.edit_message_text(
+                        "❌ **שגיאה בסריקת תא-125**\n\nאנא נסה שוב מאוחר יותר.",
+                        parse_mode='Markdown',
+                        reply_markup=InlineKeyboardMarkup([[
+                            InlineKeyboardButton("🔙 חזרה לתפריט", callback_data='main_menu')
+                        ]])
+                    )
+            else:
+                await query.edit_message_text(
+                    "❌ **סריקת תא-125 לא זמינה**\n\nחסרות חבילות נדרשות.",
+                    parse_mode='Markdown',
+                    reply_markup=InlineKeyboardMarkup([[
+                        InlineKeyboardButton("🔙 חזרה לתפריט", callback_data='main_menu')
+                    ]])
+                )
         
         # Detailed scan type help
         elif query.data == 'scan_quick_help':
@@ -2868,6 +2939,35 @@ class TelegramBot:
                 f"וודא שהסמל נכון ונסה שוב."
             )
     
+    async def ta125_scan_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /ta125scan command - scan TA-125 for stocks negative 3 days in a row"""
+        user_name = update.effective_user.first_name
+        user_id = update.effective_user.id
+        username = update.effective_user.username or "ללא שם משתמש"
+
+        logger.info(f"📊 /ta125scan - משתמש: {user_name} (@{username}) | ID: {user_id}")
+        user_logger.info(f"📊 /ta125scan - משתמש: {user_name} (@{username}) | ID: {user_id}")
+
+        status_msg = await update.message.reply_text(
+            "⏳ **סורק מדד תא-125...**\n\n"
+            "מוריד נתונים עבור ~125 מניות ובודק 3 ימי מסחר אחרונים.\n"
+            "הסריקה עשויה לקחת כ-30-60 שניות, אנא המתן...",
+            parse_mode='Markdown'
+        )
+
+        try:
+            negative_stocks, total_scanned, failed_count = await scan_ta125_async()
+            report = format_ta125_report(negative_stocks, total_scanned, failed_count)
+            await status_msg.edit_text(report, parse_mode='MarkdownV2')
+        except Exception as e:
+            logger.error(f"Error in ta125_scan_command: {e}")
+            await status_msg.edit_text(
+                "❌ **שגיאה בסריקת תא-125**\n\n"
+                f"פרטים: `{str(e)}`\n\n"
+                "אנא נסה שוב מאוחר יותר.",
+                parse_mode='Markdown'
+            )
+
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle regular text messages"""
         user_id = update.effective_user.id

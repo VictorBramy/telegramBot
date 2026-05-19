@@ -3,7 +3,7 @@ python-telegram-bot==21.0
 python-dotenv==1.0.0
 requests==2.31.0
 aiohttp==3.9.1
-yfinance==0.2.18
+yfinance>=0.2.50
 pandas==2.1.4
 numpy==1.24.3
 urllib3==2.1.0
