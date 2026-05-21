@@ -1,0 +1,55 @@
+name: Daily TA-125 Stock Report
+
+on:
+  schedule:
+    # 9:00 AM Israel time (IDT = UTC+3) = 06:00 UTC
+    # Runs Sunday-Thursday (Israeli trading week)
+    - cron: '0 6 * * 0-4'
+  workflow_dispatch:  # Allow manual trigger from GitHub UI
+
+jobs:
+  send-report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install --no-cache-dir \
+            aiohttp==3.9.1 \
+            requests==2.31.0 \
+            yfinance>=0.2.50 \
+            "pandas>=2.2.0" \
+            "numpy>=2.0.0"
+
+      - name: Generate TA-125 report
+        run: python daily_report.py
+
+      - name: Read email subject
+        id: subject
+        run: |
+          SUBJECT=$(cat email_subject.txt)
+          echo "subject=$SUBJECT" >> $GITHUB_OUTPUT
+
+      - name: Send daily report email
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: ${{ secrets.GMAIL_USERNAME }}
+          password: ${{ secrets.GMAIL_APP_PASSWORD }}
+          subject: ${{ steps.subject.outputs.subject }}
+          to: victorbramywork@gmail.com
+          from: "CrazyBot 📊 <${{ secrets.GMAIL_USERNAME }}>"
+          html_body: file://report.html
+          convert_markdown: false
