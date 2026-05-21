@@ -39,44 +39,44 @@ def build_html_report(
         status_text = f"{count} מניות בירידה ברצף — חשיפה גבוהה"
         status_icon = "🚨"
 
+    def color_pct(v):
+        c = "#e74c3c" if v < 0 else "#27ae60"
+        return f'<span style="color:{c};font-weight:bold">{v:+.2f}%</span>'
+
     stock_rows = ""
     for sec_or_ticker, name, d3, d2, d1 in negative_stocks:
         display = sec_or_ticker.replace(".TA", "")
         total = d3 + d2 + d1
-
-        def color_pct(v):
-            c = "#e74c3c" if v < 0 else "#27ae60"
-            return f'<span style="color:{c};font-weight:bold">{v:+.2f}%</span>'
-
         stock_rows += f"""
         <tr>
-          <td style="padding:10px 15px;font-weight:bold;font-size:15px">{name}</td>
-          <td style="padding:10px;color:#7f8c8d;font-size:13px">{display}</td>
-          <td style="padding:10px;text-align:center">{color_pct(d3)}</td>
-          <td style="padding:10px;text-align:center">{color_pct(d2)}</td>
-          <td style="padding:10px;text-align:center">{color_pct(d1)}</td>
-          <td style="padding:10px;text-align:center;font-weight:bold;color:#c0392b">{total:+.2f}%</td>
+          <td style="padding:12px 15px;font-weight:bold;font-size:15px">{name}
+            <div style="font-size:11px;color:#7f8c8d;font-weight:normal;margin-top:2px">{display}</div>
+          </td>
+          <td class="hide-mobile" style="padding:12px;text-align:center;font-size:13px">{color_pct(d3)}</td>
+          <td class="hide-mobile" style="padding:12px;text-align:center;font-size:13px">{color_pct(d2)}</td>
+          <td style="padding:12px;text-align:center;font-size:13px">{color_pct(d1)}</td>
+          <td style="padding:12px;text-align:center;font-weight:bold;color:#c0392b;font-size:14px">{total:+.2f}%</td>
         </tr>
-        <tr><td colspan="6" style="height:1px;background:#f0f0f0;padding:0"></td></tr>
+        <tr><td colspan="5" style="height:1px;background:#f0f0f0;padding:0"></td></tr>
         """
 
     table_html = ""
     if count > 0:
         table_html = f"""
-        <h2 style="color:#2c3e50;margin:30px 0 15px;font-size:18px">
+        <h2 style="color:#2c3e50;margin:25px 0 12px;font-size:17px;padding:0 5px">
           📉 {count} מניות בירידה 3 ימים ברצף:
         </h2>
-        <table style="width:100%;border-collapse:collapse;font-family:Arial,sans-serif;
+        <table width="100%" cellspacing="0" cellpadding="0"
+               style="border-collapse:collapse;font-family:Arial,sans-serif;
                       background:white;border-radius:8px;overflow:hidden;
                       box-shadow:0 1px 4px rgba(0,0,0,0.1)">
           <thead>
             <tr style="background:#2c3e50;color:white">
-              <th style="padding:12px 15px;text-align:right">מניה</th>
-              <th style="padding:12px;text-align:right">סימול</th>
-              <th style="padding:12px;text-align:center">לפני 3 ימים</th>
-              <th style="padding:12px;text-align:center">לפני 2 ימים</th>
-              <th style="padding:12px;text-align:center">אתמול</th>
-              <th style="padding:12px;text-align:center">סה"כ</th>
+              <th style="padding:11px 15px;text-align:right;font-size:13px">מניה</th>
+              <th class="hide-mobile" style="padding:11px 8px;text-align:center;font-size:12px">לפני 3</th>
+              <th class="hide-mobile" style="padding:11px 8px;text-align:center;font-size:12px">לפני 2</th>
+              <th style="padding:11px 8px;text-align:center;font-size:12px">אתמול</th>
+              <th style="padding:11px 8px;text-align:center;font-size:12px">סה"כ</th>
             </tr>
           </thead>
           <tbody>
@@ -91,59 +91,104 @@ def build_html_report(
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>סריקת תא-125 יומית</title>
+  <style>
+    @media only screen and (max-width: 600px) {{
+      .email-wrapper {{ margin: 0 !important; border-radius: 0 !important; }}
+      .header-title {{ font-size: 20px !important; }}
+      .header-sub {{ font-size: 12px !important; }}
+      .stats-cell {{ padding: 10px 8px !important; }}
+      .stats-num {{ font-size: 22px !important; }}
+      .stats-label {{ font-size: 11px !important; }}
+      .hide-mobile {{ display: none !important; }}
+      .section-pad {{ padding: 15px !important; }}
+      .status-text {{ font-size: 14px !important; }}
+    }}
+  </style>
 </head>
 <body style="margin:0;padding:0;background:#f0f2f5;font-family:Arial,sans-serif;direction:rtl">
-  <div style="max-width:750px;margin:30px auto;background:white;border-radius:12px;
-              overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.12)">
+  <table width="100%" cellspacing="0" cellpadding="0" style="background:#f0f2f5">
+    <tr><td align="center" style="padding:20px 0">
+
+  <table class="email-wrapper" width="100%" cellspacing="0" cellpadding="0"
+         style="max-width:680px;background:white;border-radius:12px;
+                overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.12)">
 
     <!-- Header -->
-    <div style="background:linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);
-                padding:30px;text-align:center;color:white">
-      <div style="font-size:40px;margin-bottom:8px">📊</div>
-      <h1 style="margin:0;font-size:24px;letter-spacing:1px">סריקת מדד תא-125</h1>
-      <p style="margin:8px 0 0;opacity:0.8;font-size:14px">
-        3 ימים שליליים ברצף | {date_str} בשעה {time_str}
-      </p>
-    </div>
+    <tr>
+      <td style="background:linear-gradient(135deg,#1a1a2e 0%,#16213e 50%,#0f3460 100%);
+                 padding:28px 20px;text-align:center;color:white">
+        <div style="font-size:38px;margin-bottom:6px">📊</div>
+        <div class="header-title" style="font-size:22px;font-weight:bold;letter-spacing:1px">סריקת מדד תא-125</div>
+        <div class="header-sub" style="margin:6px 0 0;opacity:0.8;font-size:13px">
+          3 ימים שליליים ברצף &nbsp;|&nbsp; {date_str} בשעה {time_str}
+        </div>
+      </td>
+    </tr>
 
     <!-- Status Banner -->
-    <div style="background:{status_color};padding:18px 30px;color:white;text-align:center">
-      <span style="font-size:20px">{status_icon}</span>
-      <span style="font-size:16px;font-weight:bold;margin-right:10px">{status_text}</span>
-    </div>
+    <tr>
+      <td style="background:{status_color};padding:15px 20px;color:white;text-align:center">
+        <span style="font-size:18px">{status_icon}</span>
+        <span class="status-text" style="font-size:15px;font-weight:bold;margin-right:8px">{status_text}</span>
+      </td>
+    </tr>
 
-    <!-- Stats -->
-    <div style="display:flex;padding:20px 30px;background:#f8f9fa;
-                border-bottom:1px solid #e9ecef;gap:20px;justify-content:center">
-      <div style="text-align:center;background:white;padding:15px 25px;
-                  border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,0.08)">
-        <div style="font-size:28px;font-weight:bold;color:#2c3e50">{total_scanned}</div>
-        <div style="font-size:12px;color:#7f8c8d;margin-top:4px">מניות נסרקו</div>
-      </div>
-      <div style="text-align:center;background:white;padding:15px 25px;
-                  border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,0.08)">
-        <div style="font-size:28px;font-weight:bold;color:{status_color}">{count}</div>
-        <div style="font-size:12px;color:#7f8c8d;margin-top:4px">3 ימים שליליים</div>
-      </div>
-      <div style="text-align:center;background:white;padding:15px 25px;
-                  border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,0.08)">
-        <div style="font-size:28px;font-weight:bold;color:#7f8c8d">{failed_count}</div>
-        <div style="font-size:12px;color:#7f8c8d;margin-top:4px">נכשלו</div>
-      </div>
-    </div>
+    <!-- Stats (table-based for email client compat) -->
+    <tr>
+      <td style="background:#f8f9fa;padding:16px 12px;border-bottom:1px solid #e9ecef">
+        <table width="100%" cellspacing="0" cellpadding="0">
+          <tr>
+            <td class="stats-cell" width="33%" style="padding:10px 6px;text-align:center">
+              <table width="100%" cellspacing="0" cellpadding="0">
+                <tr><td style="background:white;border-radius:8px;padding:14px 8px;text-align:center;
+                               box-shadow:0 1px 4px rgba(0,0,0,0.08)">
+                  <div class="stats-num" style="font-size:26px;font-weight:bold;color:#2c3e50">{total_scanned}</div>
+                  <div class="stats-label" style="font-size:11px;color:#7f8c8d;margin-top:4px">מניות נסרקו</div>
+                </td></tr>
+              </table>
+            </td>
+            <td class="stats-cell" width="33%" style="padding:10px 6px;text-align:center">
+              <table width="100%" cellspacing="0" cellpadding="0">
+                <tr><td style="background:white;border-radius:8px;padding:14px 8px;text-align:center;
+                               box-shadow:0 1px 4px rgba(0,0,0,0.08)">
+                  <div class="stats-num" style="font-size:26px;font-weight:bold;color:{status_color}">{count}</div>
+                  <div class="stats-label" style="font-size:11px;color:#7f8c8d;margin-top:4px">3 ימים שליליים</div>
+                </td></tr>
+              </table>
+            </td>
+            <td class="stats-cell" width="33%" style="padding:10px 6px;text-align:center">
+              <table width="100%" cellspacing="0" cellpadding="0">
+                <tr><td style="background:white;border-radius:8px;padding:14px 8px;text-align:center;
+                               box-shadow:0 1px 4px rgba(0,0,0,0.08)">
+                  <div class="stats-num" style="font-size:26px;font-weight:bold;color:#7f8c8d">{failed_count}</div>
+                  <div class="stats-label" style="font-size:11px;color:#7f8c8d;margin-top:4px">נכשלו</div>
+                </td></tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
 
-    <!-- Table -->
-    <div style="padding:20px 30px">
-      {table_html if count > 0 else
-       '<div style="text-align:center;padding:40px;color:#27ae60;font-size:18px">✅ אין מניות עם 3 ימים שליליים ברצף היום!</div>'}
-    </div>
+    <!-- Table / Empty state -->
+    <tr>
+      <td class="section-pad" style="padding:20px 25px">
+        {'<div style="text-align:center;padding:35px 20px;color:#27ae60;font-size:17px">✅ אין מניות עם 3 ימים שליליים ברצף היום!</div>' if count == 0 else table_html}
+      </td>
+    </tr>
 
     <!-- Footer -->
-    <div style="background:#2c3e50;padding:20px;text-align:center;color:#bdc3c7;font-size:12px">
-      <p style="margin:0">📈 נוצר אוטומטית ע"י CrazyBot | מקור: בורסת תל אביב (TASE)</p>
-      <p style="margin:6px 0 0;opacity:0.7">{date_str} {time_str} UTC</p>
-    </div>
-  </div>
+    <tr>
+      <td style="background:#2c3e50;padding:18px 20px;text-align:center;color:#bdc3c7;font-size:12px">
+        <div>📈 נוצר אוטומטית ע"י CrazyBot | מקור: בורסת תל אביב (TASE)</div>
+        <div style="margin:5px 0 0;opacity:0.7">{date_str} {time_str} UTC</div>
+      </td>
+    </tr>
+
+  </table>
+
+    </td></tr>
+  </table>
 </body>
 </html>"""
     return html
