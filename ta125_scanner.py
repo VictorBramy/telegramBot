@@ -38,7 +38,7 @@ _TASE_HEADERS = {
 _TASE_COMPONENTS_URL = "https://api.tase.co.il/api/index/components"
 _TASE_HISTORY_URL    = "https://api.tase.co.il/api/security/historyeod"
 _TA125_INDEX_ID      = "137"   # official TASE index ID for TA-125
-_DAYS_TO_FETCH       = 5       # fetch 5 days so we always have at least 3
+_DAYS_TO_FETCH       = 12      # fetch 12 days to detect 3+ consecutive negative days
 
 
 # ---------------------------------------------------------------------------
@@ -88,11 +88,13 @@ async def _fetch_history_tase_async(
     sec_number: str,         # e.g. "00662577"
     name: str,
     semaphore: asyncio.Semaphore,
-) -> Optional[Tuple[str, str, float, float, float]]:
+) -> Optional[Tuple]:
     """
-    Fetch last 3 trading days for one stock via the TASE historyeod API.
-    Returns (sec_number, name, day3_pct, day2_pct, day1_pct) where day1 = most recent,
-    or None if the stock does not have 3 consecutive negative days or data is unavailable.
+    Fetch last 12 trading days for one stock via the TASE historyeod API.
+    Returns (sec_number, name, day3_pct, day2_pct, day1_pct, consecutive_days, total_pct)
+    where day1 = most recent, consecutive_days >= 3,
+    total_pct = sum of ALL consecutive negative days (may be more than 3).
+    Returns None if stock does not have 3+ consecutive negative days or data unavailable.
     """
     body = {"pType": 1, "TotalRec": _DAYS_TO_FETCH, "pageNum": 1, "oId": sec_number, "lang": "0"}
     async with semaphore:
@@ -114,30 +116,77 @@ async def _fetch_history_tase_async(
     if len(items) < 3:
         return None
 
-    # Items sorted newest ג†’ oldest
-    c_day1 = items[0].get("Change")   # most recent
-    c_day2 = items[1].get("Change")
-    c_day3 = items[2].get("Change")   # oldest of the 3
+    # Items sorted newest -> oldest; count consecutive negative days from most recent
+    consecutive = 0
+    total_all_pct = 0.0
+    for item in items:
+        change = item.get("Change")
+        if change is None or float(change) >= 0:
+            break
+        consecutive += 1
+        total_all_pct += float(change)
 
-    if c_day1 is None or c_day2 is None or c_day3 is None:
+    if consecutive < 3:
         return None
 
-    if float(c_day1) < 0 and float(c_day2) < 0 and float(c_day3) < 0:
-        return (sec_number, name, float(c_day3), float(c_day2), float(c_day1))
-    return None
+    # Last 3 days for column display (day1 = most recent, day3 = oldest of those 3)
+    c_day1 = float(items[0].get("Change", 0))
+    c_day2 = float(items[1].get("Change", 0))
+    c_day3 = float(items[2].get("Change", 0))
 
+    return (sec_number, name, c_day3, c_day2, c_day1, consecutive, total_all_pct)
+
+
+async def _fetch_52w_data_async(
+    session: aiohttp.ClientSession,
+    sec_number: str,
+    semaphore: asyncio.Semaphore,
+) -> Tuple[float, float]:
+    """
+    Fetch ~1 year of EOD data from TASE and return (current_price, high_52w).
+    """
+    body = {"pType": 1, "TotalRec": 260, "pageNum": 1, "oId": sec_number, "lang": "0"}
+    async with semaphore:
+        try:
+            async with session.post(
+                _TASE_HISTORY_URL,
+                json=body,
+                headers=_TASE_HEADERS,
+                timeout=aiohttp.ClientTimeout(total=20),
+            ) as resp:
+                if resp.status != 200:
+                    return (0.0, 0.0)
+                data = await resp.json(content_type=None)
+        except Exception as e:
+            logger.debug(f"52w data fetch failed for {sec_number}: {e}")
+            return (0.0, 0.0)
+
+    items = data.get("Items", [])
+    if not items:
+        return (0.0, 0.0)
+
+    # CloseRate is in agorot (1 NIS = 100 agorot); divide by 100 for NIS display
+    current_price = float(items[0].get("CloseRate") or 0) / 100.0
+    prices = [
+        float(item.get("CloseRate") or 0) / 100.0
+        for item in items
+        if item.get("CloseRate")
+    ]
+    high_52w = max(prices) if prices else 0.0
+    return (current_price, high_52w)
 
 async def _scan_tase_api_async(
     members: List[Dict],
-) -> Tuple[List[Tuple[str, str, float, float, float]], int, int]:
+) -> Tuple[List[Tuple], int, int]:
     """
     Scan all TA-125 members concurrently via the TASE API.
     Returns (negative_list, scanned_count, failed_count).
+    Each entry: (sec_number, name, d3, d2, d1, consecutive_days, total_pct).
     """
     semaphore = asyncio.Semaphore(15)  # max 15 parallel requests
     connector = aiohttp.TCPConnector(limit=20)
 
-    results: List[Tuple[str, str, float, float, float]] = []
+    results: List[Tuple] = []
     scanned = 0
     failed = 0
 
@@ -197,10 +246,10 @@ _TASE_TO_YFINANCE: Dict[str, str] = {
 
 def _yfinance_fallback(
     sec_numbers_needed: List[Tuple[str, str]]
-) -> List[Tuple[str, str, float, float, float]]:
+) -> List[Tuple]:
     """
     For sec_numbers that TASE API failed on, try Yahoo Finance.
-    sec_numbers_needed: list of (sec_number, name)
+    Returns 9-tuples: (yf_ticker, name, d3, d2, d1, consecutive_days, total_pct, current_price, high_52w)
     """
     import yfinance as yf
     import pandas as pd
@@ -221,7 +270,7 @@ def _yfinance_fallback(
     try:
         data = yf.download(
             tickers=yf_tickers,
-            period="15d",
+            period="1y",   # 1 year for 52w high + consecutive detection
             interval="1d",
             progress=False,
             auto_adjust=True,
@@ -248,12 +297,28 @@ def _yfinance_fallback(
             if close is None or len(close) < 4:
                 continue
 
-            d1 = (close.iloc[-3] - close.iloc[-4]) / close.iloc[-4] * 100
-            d2 = (close.iloc[-2] - close.iloc[-3]) / close.iloc[-3] * 100
-            d3 = (close.iloc[-1] - close.iloc[-2]) / close.iloc[-2] * 100
+            # Count consecutive negative days from most recent
+            consecutive = 0
+            total_pct = 0.0
+            for idx in range(len(close) - 1, 0, -1):
+                pct = (close.iloc[idx] - close.iloc[idx - 1]) / close.iloc[idx - 1] * 100
+                if pct >= 0:
+                    break
+                consecutive += 1
+                total_pct += pct
 
-            if d1 < 0 and d2 < 0 and d3 < 0:
-                results.append((yf_ticker, name, d1, d2, d3))
+            if consecutive < 3:
+                continue
+
+            # Last 3 days for display (d3=oldest, d1=most recent)
+            d3 = (close.iloc[-3] - close.iloc[-4]) / close.iloc[-4] * 100
+            d2 = (close.iloc[-2] - close.iloc[-3]) / close.iloc[-3] * 100
+            d1 = (close.iloc[-1] - close.iloc[-2]) / close.iloc[-2] * 100
+
+            current_price = float(close.iloc[-1])
+            high_52w = float(close.max())
+
+            results.append((yf_ticker, name, d3, d2, d1, consecutive, total_pct, current_price, high_52w))
         except Exception as e:
             logger.debug(f"yfinance fallback error for {yf_ticker}: {e}")
 
@@ -314,8 +379,29 @@ async def _main_scan() -> Tuple[List[Tuple[str, str, float, float, float]], int,
             if not any(e[1] == entry[1] for e in neg_tase):
                 neg_tase.append(entry)
 
-    # Sort by total cumulative decline (worst first)
-    neg_tase.sort(key=lambda x: x[2] + x[3] + x[4])
+    # Enrich TASE API results (7-tuples) with 52-week high and current price
+    tase_entries = [e for e in neg_tase if not str(e[0]).endswith(".TA")]
+    yf_entries   = [e for e in neg_tase if str(e[0]).endswith(".TA")]
+
+    if tase_entries:
+        sem52 = asyncio.Semaphore(10)
+        async with aiohttp.ClientSession(
+            connector=aiohttp.TCPConnector(limit=15)
+        ) as sess52:
+            results_52w = await asyncio.gather(
+                *[_fetch_52w_data_async(sess52, e[0], sem52) for e in tase_entries],
+                return_exceptions=True,
+            )
+        enriched = []
+        for entry, r52 in zip(tase_entries, results_52w):
+            cur, hi = r52 if isinstance(r52, tuple) else (0.0, 0.0)
+            enriched.append(entry + (cur, hi))
+        neg_tase = enriched + yf_entries
+    else:
+        neg_tase = yf_entries
+
+    # Sort by total all-consecutive-days decline (worst first)
+    neg_tase.sort(key=lambda x: x[6] if len(x) > 6 else x[2] + x[3] + x[4])
 
     return neg_tase, scanned, failed
 
@@ -360,15 +446,20 @@ def format_ta125_report(
         return s
 
     lines = []
-    for sec_or_ticker, name, d3, d2, d1 in negative_stocks:
-        display = sec_or_ticker.replace(".TA", "")
+    for entry in negative_stocks:
+        sec_or_ticker = entry[0]
+        name = entry[1]
+        d3, d2, d1 = entry[2], entry[3], entry[4]
+        consecutive = entry[5] if len(entry) > 5 else 3
+        total_all = entry[6] if len(entry) > 6 else d3 + d2 + d1
+        raw = sec_or_ticker.replace(".TA", "")
+        display = str(int(raw)) if raw.isdigit() else raw
         safe_name = _escape(name)
         safe_ticker = _escape(display)
-        total = d3 + d2 + d1
         lines.append(
-            f"נ”´ *{safe_name}* \\(`{safe_ticker}`\\)\n"
-            f"   ׳׳₪׳ ׳™ 3 ׳™׳׳™׳: {d3:+.2f}%  \\|  ׳׳₪׳ ׳™ 2: {d2:+.2f}%  \\|  ׳׳×׳׳•׳: {d1:+.2f}%\n"
-            f"   נ“ ׳¡׳”\"׳›: {total:+.2f}%\n"
+            f"\U0001f4c9 *{safe_name}* \\(`{safe_ticker}`\\) \\- {consecutive} ימים ↓\n"
+            f"   לפני 3: {d3:+.2f}%  \\|  לפני 2: {d2:+.2f}%  \\|  אתמול: {d1:+.2f}%\n"
+            f"   📊 סה\"כ {consecutive} ימים: {total_all:+.2f}%\n"
         )
 
     footer = (
