@@ -2,10 +2,10 @@ name: Daily TA-125 Stock Report
 
 on:
   schedule:
-    # 9:00 AM Israel time (IDT = UTC+3) = 06:00 UTC
+    # 7:00 AM Israel time (IDT = UTC+3) = 04:00 UTC
     # Runs Sunday-Thursday (Israeli trading week)
-    - cron: '0 6 * * 0-4'
-  workflow_dispatch:  # Allow manual trigger from GitHub UI
+    - cron: "0 4 * * 0-4"
+  workflow_dispatch: # Allow manual trigger from GitHub UI
 
 jobs:
   send-report:
@@ -19,8 +19,8 @@ jobs:
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-          cache: 'pip'
+          python-version: "3.11"
+          cache: "pip"
 
       - name: Install dependencies
         run: |
