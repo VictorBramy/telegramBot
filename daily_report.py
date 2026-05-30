@@ -77,7 +77,9 @@ def build_html_report(
         high_cell  = fmt_price(high_52w)
 
         # Mobile sub-line shows 52w high + days
-        mobile_sub = f'{display} · <span style="color:{days_color};font-weight:bold">{consecutive}↓</span>'
+        onclick_copy = f"navigator.clipboard.writeText('{display}');this.style.background='#27ae60';this.style.color='white';setTimeout(()=>{{this.style.background='';this.style.color='#34495e';}},1200)"
+        display_span = f'<span onclick="{onclick_copy}" style="cursor:pointer;text-decoration:underline dotted;color:#34495e;padding:1px 3px;border-radius:3px;transition:all .2s" title="לחץ להעתיק">{display}</span>'
+        mobile_sub = f'{display_span} · <span style="color:{days_color};font-weight:bold">{consecutive}↓</span>'
         if high_52w > 0:
             mobile_sub += f' · שיא: {high_cell}'
 
